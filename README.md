@@ -15,10 +15,6 @@ Detection and analysis of replay events and representational sequences.
 Requirements
 MATLAB (tested on 9.10.0.2198249 (R2021a) Update 8)
 
-Kilosort output files
-
-Phy (optional, for manual curation)
-
 Computer Vision Toolbox                               Version 10.0        (R2021a)
 Curve Fitting Toolbox                                 Version 3.5.13      (R2021a)
 Deep Learning Toolbox                                 Version 14.2        (R2021a)
