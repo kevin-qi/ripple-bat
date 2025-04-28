@@ -1,0 +1,1658 @@
+%% POOL DATA RELATED TO LFP AND THETA SWEEPS
+%=== Load data
+for hide=1
+    clr;
+    
+    %=== Default settings
+    set(groot,'defaultAxesFontSize',12);
+    set(groot,'defaultHistogramEdgeColor','none','defaultHistogramFaceAlpha',0.5);
+    
+    %=== Sessions to load (comment sessions you don't want to include)
+    sessions2include = {...
+        %'Dataset_1','32622','231006';...
+        'Dataset_1','32622','231007';...
+        'Dataset_1','32622','231008';...
+        'Dataset_1','32622','231009';...
+        'Dataset_1','32622','231010';...
+        'Dataset_2','14445','231208';...
+        'Dataset_2','14445','231209';...
+        %'Dataset_2','14445','231210';...
+        %'Dataset_2','14445','231211';...
+        %'Dataset_2','14445','231212';...
+        'Dataset_2','14611','231208';...
+        'Dataset_2','14611','231209';...
+        'Dataset_2','14611','231210';...
+        'Dataset_2','14611','231211';...
+        %'Dataset_2','14611','231212';...
+        'Dataset_3','00000','240402';...
+        'Dataset_3','00000','240403';...
+        'Dataset_3','00000','240404';...
+        'Dataset_3','00000','240405';...
+        'Dataset_3','14543','240419';...
+        'Dataset_3','14543','240420';...
+        'Dataset_3','14543','240421';...
+        'Dataset_3','14543','240422';...
+        'Dataset_3','29959','240402';...
+        'Dataset_3','29959','240403';...
+        'Dataset_3','29959','240404';...
+        'Dataset_3','29959','240405';...
+        ...
+        };
+    
+    %=== Load data and aggregate them in the Multi_Day structure
+    Folder = cd;    FileList = dir(fullfile(Folder, '**', 'Analyzed_NPs_*'));   LFP = [];   NP_units = [];  SWPs = []; ids = [];
+    for nc = 1:length(FileList)
+        cd(FileList(nc).folder);
+        load(FileList(nc).name);
+        if ~isempty(LFP_PSD) && any(cellfun(@(row) isequal(row, LFP_PSD.unique_ID(1,:)), num2cell(sessions2include, 2)))
+            LFP = [LFP; LFP_PSD];
+            NP_units = [NP_units;   NP_unit];
+            SWPs = [SWPs;   SWP_table];
+        end
+        disp([num2str(length(FileList)-nc),' remaining sessions to load...']);
+    end
+    cd(Folder); clearvars -except LFP NP_units SWPs
+    
+    NP_units = struct2table(NP_units);
+    
+end
+
+%% LOOK AT LFP
+for hide=1
+    
+    %=== Define frequency range
+    freq_smp = 0.005;
+    freq = [0:freq_smp:250];
+    
+    %=== Initialize relevant vaiables
+    PSD_r = zeros(size(LFP,1),numel(freq));
+    PSD_f = zeros(size(LFP,1),numel(freq));
+    PSD_b = zeros(size(LFP,1),numel(freq));
+    PSD_a = zeros(size(LFP,1),numel(freq));
+    PSD_pre = zeros(size(LFP,1),numel(freq));
+    PSD_dur = zeros(size(LFP,1),numel(freq));
+    PSD_pst = zeros(size(LFP,1),numel(freq));
+    
+    %=== Reinterpolate the LFP on the same frequency range
+    N_s = size(LFP,1);
+    for i=1:size(LFP,1)
+        PSD_r(i,:)  = interp1(LFP(i).f_PSD_r,LFP(i).PSD_r,freq,'linear','extrap');
+        PSD_f(i,:)  = interp1(LFP(i).f_PSD_f,LFP(i).PSD_f,freq,'linear','extrap');
+        PSD_b(i,:)  = interp1(LFP(i).f_PSD_b,LFP(i).PSD_b,freq,'linear','extrap');
+        PSD_a(i,:)  = interp1(LFP(i).f_PSD_a,LFP(i).PSD_a,freq,'linear','extrap');
+        PSD_pre(i,:)  = interp1(LFP(i).f_PSD_pre,LFP(i).PSD_pre,freq,'linear','extrap');
+        PSD_dur(i,:)  = interp1(LFP(i).f_PSD_dur,LFP(i).PSD_dur,freq,'linear','extrap');
+        PSD_pst(i,:)  = interp1(LFP(i).f_PSD_pst,LFP(i).PSD_pst,freq,'linear','extrap');
+    end
+    
+    %=== Normalize on the whole spectrum and scale to have unitary area
+    PSD_r = PSD_r./sum(PSD_r,2);
+    PSD_f = PSD_f./sum(PSD_f,2);
+    PSD_b = PSD_b./sum(PSD_b,2);
+    PSD_a = PSD_a./sum(PSD_a,2);
+    PSD_pre = PSD_pre./sum(PSD_pre,2);
+    PSD_dur = PSD_dur./sum(PSD_dur,2);
+    PSD_pst = PSD_pst./sum(PSD_pst,2);
+    
+    %=== Average and smooth
+    avg_PSD_r =   smoothdata(mean(PSD_r,1),  'movmedian',1/freq_smp);
+    avg_PSD_f =   smoothdata(mean(PSD_f,1),  'movmedian',1/freq_smp);
+    avg_PSD_b =   smoothdata(mean(PSD_b,1),  'movmedian',1/freq_smp);
+    avg_PSD_a =   smoothdata(mean(PSD_a,1),  'movmedian',1/freq_smp);
+    avg_PSD_pre = smoothdata(mean(PSD_pre,1),'movmedian',1/freq_smp);
+    avg_PSD_dur = smoothdata(mean(PSD_dur,1),'movmedian',1/freq_smp);
+    avg_PSD_pst = smoothdata(mean(PSD_pst,1),'movmedian',1/freq_smp);
+    
+    std_PSD_r =   smoothdata(std(PSD_r,[],1)./sqrt(N_s),  'movmedian',1/freq_smp);
+    std_PSD_f =   smoothdata(std(PSD_f,[],1)./sqrt(N_s),  'movmedian',1/freq_smp);
+    std_PSD_b =   smoothdata(std(PSD_b,[],1)./sqrt(N_s),  'movmedian',1/freq_smp);
+    std_PSD_a =   smoothdata(std(PSD_a,[],1)./sqrt(N_s),  'movmedian',1/freq_smp);
+    std_PSD_pre = smoothdata(std(PSD_pre,[],1)./sqrt(N_s),'movmedian',1/freq_smp);
+    std_PSD_dur = smoothdata(std(PSD_dur,[],1)./sqrt(N_s),'movmedian',1/freq_smp);
+    std_PSD_pst = smoothdata(std(PSD_pst,[],1)./sqrt(N_s),'movmedian',1/freq_smp);
+    
+    %=== Plot the PSDs
+    figure('units','normalized','outerposition',[0.1 0.3 0.3 0.3]);
+    tiledlayout(1,3,'TileSpacing','tight');
+    nexttile;   plot(freq,avg_PSD_r,'k','LineWidth',3);    hold on;     plot(freq,avg_PSD_f,'r','LineWidth',3);
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  legend('Rest','Flight');        title('LFP');
+    nexttile;   plot(freq,avg_PSD_r,'k','LineWidth',3);    hold on;     plot(freq,avg_PSD_b,'g','LineWidth',3);
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  legend('Rest','0-Bouts');        title('LFP');
+    nexttile;   plot(freq,avg_PSD_a,'k','LineWidth',3);
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  title('Accelerometer');
+    
+    %============================================================================================================================================================================================================
+    %=== Some processing on the plotting of the accelerometer spectra
+    [max_m,max_loc] = max(PSD_a(:,freq>1 & freq<11),[],2);
+    %PSD_a_norm = smoothdata(PSD_a./max_m,2,'gaussian',100);
+    PSD_a_norm = PSD_a./max_m;
+    [~,sorted_idx] = sort(max_loc);
+    col = spring(numel(sorted_idx));
+
+    figure('units','normalized','outerposition',[0.1 0.3 0.3 0.4]);
+    tiledlayout(1,2,'TileSpacing','tight');
+    nexttile;   
+    for i=1:numel(sorted_idx)
+    plot(freq,PSD_a_norm(sorted_idx(i),:),'LineWidth',1,'Color',col(i,:));  hold on;
+    end
+    plot(freq,mean(PSD_a_norm,1),'LineWidth',4,'Color','k');
+    xlim([6 10]);
+    nexttile;   data_tmp = PSD_a_norm;
+    plotWinterval_AF_v0(freq,mean(data_tmp,'omitnan'),mean(data_tmp,'omitnan')-std(data_tmp,[],'omitnan')./sqrt(size(data_tmp,1)),mean(data_tmp,'omitnan')+std(data_tmp,[],'omitnan')./sqrt(size(data_tmp,1)),'r');
+    xlim([1 20]);
+    %============================================================================================================================================================================================================
+    
+    %=== Plot the PSDs
+    figure('units','normalized','outerposition',[0.1 0.6 0.3 0.3]);
+    tiledlayout(1,3,'TileSpacing','tight');
+    nexttile;
+    plotWinterval_AF_v0(freq,avg_PSD_r,avg_PSD_r-std_PSD_r,avg_PSD_r+std_PSD_r,'k');    hold on;
+    plotWinterval_AF_v0(freq,avg_PSD_f,avg_PSD_f-std_PSD_f,avg_PSD_f+std_PSD_f,'r');    hold on;
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  title('LFP');
+    nexttile;
+    plotWinterval_AF_v0(freq,avg_PSD_r,avg_PSD_r-std_PSD_r,avg_PSD_r+std_PSD_r,'k');    hold on;
+    plotWinterval_AF_v0(freq,avg_PSD_b,avg_PSD_b-std_PSD_b,avg_PSD_b+std_PSD_b,'g');    hold on;
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  title('LFP');
+    nexttile;
+    plotWinterval_AF_v0(freq,avg_PSD_a,avg_PSD_a-std_PSD_a,avg_PSD_a+std_PSD_a,'k');    hold on;
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  title('Accelerometer');
+    
+    %=== Plot the PSDs
+    figure('units','normalized','outerposition',[0.4 0.3 0.1 0.3]);
+    plot(freq,avg_PSD_pre,'k','LineWidth',3);    hold on;     plot(freq,avg_PSD_dur,'r','LineWidth',3);   plot(freq,avg_PSD_pst,'b','LineWidth',3);
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  legend('LFP (Pre)','LFP (Dur)','LFP (Pst)');
+    
+    %=== Find peak of wingbeat signal and plot the PSDs
+    [~,max_loc] = max(avg_PSD_a);
+    wb_freq = freq(max_loc);
+    figure('units','normalized','outerposition',[0.4 0.3 0.15 0.3]);
+    plot(freq,avg_PSD_a,'k','LineWidth',3);
+    xlim([0 20]);   xlabel('Frequency (Hz)');   ylabel('PSD (Norm.)');  title('Accelerometer');
+    
+    %=== Quantify a few features of the LFP
+    LFP_table = struct2table(LFP);
+    tt2dt = vertcat(LFP.theta2delta_flgt);
+    dur_pre_diff = vertcat(LFP.delta_tht_DurPre);
+    fract_flights_wTht = mean(cellfun(@(x,y,z) sum(x>0 & y<0.05 & z>2),LFP_table.delta_tht_DurPre,LFP_table.p_val_tht_DurPre,LFP_table.theta2delta_flgt)./LFP_table.f_num);
+    pwr_b = LFP_table.perc_thtpower_b;
+    pwr_f = LFP_table.perc_thtpower_f;
+    disp([num2str(fract_flights_wTht*sum(LFP_table.f_num),3),' out of ', num2str(sum(LFP_table.f_num),4), ' flights with theta (', num2str(fract_flights_wTht,3),')' ]);
+    LFP_table.fract_flights_wTht = cellfun(@(x,y,z) sum(x>0 & y<0.05 & z>2),LFP_table.delta_tht_DurPre,LFP_table.p_val_tht_DurPre,LFP_table.theta2delta_flgt)./LFP_table.f_num;
+    LFP_table.fract_power_fb = pwr_f./pwr_b;
+    
+    %=== Find peak wingbeat frequency and add to LFP table
+    for i=1:size(LFP,1)
+        [~,peak_loc_tmp] = findpeaks(smoothdata(PSD_a(i,freq>5 & freq<11),'gaussian',50),freq(freq>5 & freq<11),'SortStr','descend');
+        LFP_table.wbt_freq(i) = peak_loc_tmp(1);
+    end
+    
+    %========================================== SINGLE ANIMAL STATISTICS =======================================
+    %=== Unique bat IDs
+    unique_batIDs = unique(LFP_table.unique_ID(:,2),'stable');   % Get the unique bat IDs (as they appear)
+    N_bats = numel(unique_batIDs);                              % Number of different bats
+    
+    %=== Replay Features
+    SBC = {};                                                   % Cell array for accumulating the single session values
+    for j=1:N_bats
+        LFP_table_single_bat = LFP_table(strcmp(LFP_table.unique_ID(:,2),unique_batIDs(j)),:);
+        [~,~,LFP_table_single_bat.sessionID] =  unique(string(LFP_table_single_bat.unique_ID(:,3)),'rows');
+        bat_info_summary = groupsummary(LFP_table_single_bat,'sessionID','mean',{'wbt_freq','fract_flights_wTht','fract_power_fb'});
+       
+        SBC{j,1} = bat_info_summary.mean_wbt_freq;
+        SBC{j,2} = bat_info_summary.mean_fract_flights_wTht;
+        SBC{j,3} = bat_info_summary.mean_fract_power_fb;
+        
+    end
+    figure('units','normalized','outerposition',[.1 .3 .1 .3]); plot_distr_multi_AF_v1(SBC(:,1), unique_batIDs', 'SEM', 'Wingbeat Frequency','box');   ylim_tmp = ylim;    ylim([0 ylim_tmp(2)*1.1]);
+    figure('units','normalized','outerposition',[.2 .3 .1 .3]); plot_distr_multi_AF_v1(SBC(:,2), unique_batIDs', 'SEM', 'Fraction Flights with Theta','box');   ylim_tmp = ylim;    ylim([0 1]);
+    figure('units','normalized','outerposition',[.3 .3 .1 .3]); plot_distr_multi_AF_v1(SBC(:,3), unique_batIDs', 'SEM', 'Ratio Power Theta Fligth to Bout','box');   ylim_tmp = ylim;    ylim([0 1]);
+    %========================================== =============== =======================================
+    
+    %=== Plot a few features of the single flights
+    figure('units','normalized','outerposition',[0.1 0.2 0.3 0.3]);
+    tiledlayout(1,3,'TileSpacing','tight');
+    nexttile;  histogram(tt2dt,[0:0.1:5],'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');
+    hold on;    plot([2 2],ylim,'k');   title(['Fraction flights: ', num2str(sum(tt2dt>2)/numel(tt2dt),2)]);  ylabel('Fraction'); xlabel('Theta to Delta Ratio');
+    nexttile;  histogram(dur_pre_diff,[-2:0.1:2],'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');
+    hold on;    plot([0 0],ylim,'k');   title(['Fraction flight: ', num2str(sum(dur_pre_diff>0)/numel(dur_pre_diff),2)]);  ylabel('Fraction'); xlabel('Delta Theta (Flight-Pre)');
+    nexttile;
+    plot_distr_AF_v0(pwr_b, pwr_f, {'Bouts', 'Flight'}, 'SEM', 'Relative Theta Power'); ylim([0 max([pwr_b;pwr_f])]);
+    
+    histogram(vertcat(LFP_table.tht_bouts_dur{:}),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');
+    
+    signrank(pwr_b, pwr_f)
+    disp(['Fraction bouts during rest: ', num2str(1-mean([LFP.fract_bouts_flight]),3)]);
+    std(1-[LFP.fract_bouts_flight])./sqrt(numel([LFP.fract_bouts_flight]))
+    
+    %=== Look at Tamir's power
+    figure('units','normalized','outerposition',[0.1 0.2 0.1 0.4]);
+    plot_distr_AF_v0(LFP_table.tmr_power(:,1), LFP_table.tmr_power(:,2), {'Flight', 'Rest'}, 'SEM', 'Median Non-Oscillatory Power');  hold on; 
+    title(['p = ',num2str(signrank(LFP_table.tmr_power(:,1), LFP_table.tmr_power(:,2)),3)]);
+    
+    %=== Look at spike-tgd LFP
+    figure('units','normalized','outerposition',[0.3 0.2 0.15 0.3]);
+    hold on;
+    data = vertcat(LFP_table.spkTgdLfP_all{:});
+    plotWinterval_AF_v0(LFP_table.spkTgdLfP_time{1,1},mean(data),mean(data)-std(data)./sqrt(size(data,1)),mean(data)+std(data)./sqrt(size(data,1)),'k');
+    data = vertcat(LFP_table.spkTgdLfP_flight{:});
+    plotWinterval_AF_v0(LFP_table.spkTgdLfP_time{1,1},mean(data),mean(data)-std(data)./sqrt(size(data,1)),mean(data)+std(data)./sqrt(size(data,1)),'r');
+    xlim('tight');  xlabel('Time from spike (s)');  ylabel('LFP (uV)'); title('Spike Triggered LFP (All sessions)');    legend('All spikes','','Flight');
+    
+end
+
+%% ADD SOME FEATURES TO EACH UNIT
+for hide=1
+    
+    N_cells = size(NP_units,1); % Number of cells
+    bin_size_1D = 0.15;
+    cosEqn = 'cos(b*x-c)';
+    phase_ctrs = (NP_units.phase_bins(1,1:end-1)+mean(diff(NP_units.phase_bins(1,:)))/2);
+    
+    
+    for nc=1:N_cells
+        
+        %=== Rearrange Place Cell Data
+        n_clus = size(NP_units.f_clus{nc,1},2)-1;
+        NP_unitOnClus = cell(1,n_clus);
+        for j = 1:n_clus
+            NP_unitOnClus{1, j} = struct(); % Initialize as struct array
+            
+            %=== Store features of the unit within a cluster of interest
+            NP_unitOnClus{1, j}.f_lenght = NP_units.f_clus{nc,1}(j+1).f_lenght;
+            NP_unitOnClus{1, j}.f_duration = NP_units.f_clus{nc,1}(j+1).f_duration;
+            NP_unitOnClus{1, j}.fr = NP_units.fr;
+            NP_unitOnClus{1, j}.SI = NP_units.f_clus{nc,1}(j+1).SI_value;
+            NP_unitOnClus{1, j}.p_val = NP_units.f_clus{nc,1}(j+1).SI_p_val;
+            NP_unitOnClus{1, j}.spkPerflight = NP_units.f_clus{nc,1}(j+1).sum_spk/NP_units.f_clus{nc,1}(j+1).n;
+            NP_unitOnClus{1, j}.plc_map = NP_units.f_clus{nc,1}(j+1).map(1,:)';
+            NP_unitOnClus{1, j}.plc_ctr = NP_units.f_clus{nc,1}(j+1).binC';
+            NP_unitOnClus{1, j}.prob_x = NP_units.f_clus{nc,1}(j+1).prob_x';
+            NP_unitOnClus{1, j}.corr_m = NP_units.f_clus{nc,1}(j+1).corr_map_OdEv;
+            NP_unitOnClus{1, j}.dist_m = NP_units.f_clus{nc,1}(j+1).dist_map_OdEv;
+            NP_unitOnClus{1, j}.stab_m = NP_units.f_clus{nc,1}(j+1).corr_map_1h2h;
+            NP_unitOnClus{1, j}.stbd_m = NP_units.f_clus{nc,1}(j+1).dist_map_1h2h;
+            NP_unitOnClus{1, j}.peakHz = NP_units.f_clus{nc,1}(j+1).peakHz;
+            NP_unitOnClus{1, j}.field_loc = NP_units.f_clus{nc,1}(j+1).field_loc;
+            NP_unitOnClus{1, j}.field_loc_m = NP_units.f_clus{nc,1}(j+1).field_loc*bin_size_1D;
+            NP_unitOnClus{1, j}.n_fields = NP_units.f_clus{nc,1}(j+1).n_fields;
+            NP_unitOnClus{1, j}.f_width = NP_units.f_clus{nc,1}(j+1).f_width;
+            NP_unitOnClus{1, j}.phase_max = NP_units.f_clus{nc,1}(j+1).phase_max;
+            NP_unitOnClus{1, j}.sff = NP_units.f_clus{nc,1}(j+1).sff;
+            NP_unitOnClus{1, j}.map_interp = NP_units.f_clus{nc,1}(j+1).map_interp;
+            NP_unitOnClus{1, j}.asymm_frct = sum(NP_units.f_clus{nc,1}(j+1).map(1,1:round(NP_units.f_clus{nc,1}(j+1).field_loc)))./sum(NP_units.f_clus{nc,1}(j+1).map(1,:));
+            NP_unitOnClus{1, j}.spk2wbt_rho = NP_units.f_clus{nc,1}(j+1).spk2wbt_rho;
+            NP_unitOnClus{1, j}.spk2wbt_pvl = NP_units.f_clus{nc,1}(j+1).spk2wbt_pvl_sh;
+            
+            NP_unitOnClus{1, j}.place_cond =    NP_unitOnClus{1, j}.spkPerflight>1 &...  % Min Spikes per flight (DEF: 1)
+                NP_unitOnClus{1, j}.peakHz>3 &...        % Min Peak Firing Rate (DEF: 3)
+                NP_unitOnClus{1, j}.stab_m>0.4 &...      % Min Stability (DEF: .4)
+                NP_unitOnClus{1, j}.sff<0.7;             % Min Peakyness (DEF: .7)
+            
+        end
+        
+        %=== Classify as place cell or not
+        place_cond = zeros(n_clus,1);
+        spkPerflight = zeros(n_clus,1);
+        pp_corr = zeros(n_clus,1);
+        pp_pval = zeros(n_clus,1);
+        asymm_frct = zeros(n_clus,1);
+        for j = 1:n_clus
+            place_cond(j) = NP_unitOnClus{1, j}.place_cond;
+            spkPerflight(j) = NP_unitOnClus{1, j}.spkPerflight;
+            pp_corr(j) = NP_unitOnClus{1, j}.spk2wbt_rho;
+            pp_pval(j) = NP_unitOnClus{1, j}.spk2wbt_pvl;
+            asymm_frct(j) = NP_unitOnClus{1, j}.asymm_frct;
+        end
+        NP_units.place_cond(nc) = any(place_cond);
+        NP_units.analz_cond(nc) = any(spkPerflight>1);
+        NP_units.pp_analz_cond(nc) = any(~isnan(pp_corr));
+        [min_val,min_loc] = min(pp_corr(place_cond & pp_pval<0.05));
+        NP_units.phase_prec(nc) = ~isempty(pp_corr(place_cond & pp_pval<0.05));
+        if ~isempty(min_val)
+            NP_units.phs_prc_corr(nc) = min_val;
+            NP_units.phs_prc_asym(nc) = asymm_frct(min_loc);
+        else
+            NP_units.phs_prc_corr(nc) = NaN;
+            NP_units.phs_prc_asym(nc) = NaN;
+        end
+        
+        %=== Add a few more features
+        NP_units.num_spikes_f(nc) = sum(~isnan(NP_units.spk_phase2wbt_F{nc,1}));    % Number of spikes in flight
+        NP_units.spk_phase2wbt_R2(nc) = NaN;
+        NP_units.spk_phase2wbt_fit_par(nc,:) = NaN(1,2);
+        NP_units.spk2wbt_p(nc) = NaN;
+        NP_units.spk2wbt_pref_phase(nc) = NaN;
+        NP_units.spk_phase2wbt_corrV(nc) = NaN;
+        NP_units.spk_phase2wbt_corrP(nc) = NaN;
+        NP_units.spk_phase2tmr_R2(nc) = NaN;
+        NP_units.spk_phase2tmr_fit_par(nc,:) = NaN(1,2);
+        NP_units.spk2tmr_p(nc) = NaN;
+        NP_units.spk2tmr_pref_phase(nc) = NaN;
+        NP_units.spk_phase2tmr_corrV(nc) = NaN;
+        NP_units.spk_phase2tmr_corrP(nc) = NaN;
+        if numel(NP_units.spk_phase2wbt_F{nc,1})>10
+            
+            %=== Fit with cosine function
+            x = [phase_ctrs,phase_ctrs+2*pi];
+            y = repmat(smoothdata(NP_units.spk_phase2wbt_F_counts{nc,:}','movmean',3),1,2);
+            x1 = x(~isnan(y));  y1 = y(~isnan(y));
+            y1 = normalize(y1-mean(y1),'range',[-1 1]);
+            [f1,gof1] = fit(x1',y1',cosEqn,'Start',[2 0],'Lower',[-inf 0]);
+            [f2,gof2] = fit(x1',y1',cosEqn,'Start',[1 0],'Lower',[-inf 0]);
+%             [f1,gof1] = fit(x1',y1',cosEqn,'Start',[2 0],'Lower',[0 -pi]);
+%             [f2,gof2] = fit(x1',y1',cosEqn,'Start',[1 0],'Lower',[0 -pi]);
+            
+            %=== Keep best fit
+            if gof1.rsquare>gof2.rsquare
+                NP_units.spk_phase2wbt_R2(nc) = gof1.rsquare;
+                NP_units.spk_phase2wbt_fit_par(nc,:) = coeffvalues(f1);
+                [NP_units.spk_phase2wbt_corrV(nc),NP_units.spk_phase2wbt_corrP(nc)] = corr(y1',f1(x1));
+            else
+                NP_units.spk_phase2wbt_R2(nc) = gof2.rsquare;
+                NP_units.spk_phase2wbt_fit_par(nc,:) = coeffvalues(f2);
+                [NP_units.spk_phase2wbt_corrV(nc),NP_units.spk_phase2wbt_corrP(nc)] = corr(y1',f2(x1));
+            end
+            NP_units.spk2wbt_p(nc) = circ_rtest(NP_units.spk_phase2wbt_F{nc,1});    % p value Rayleight test
+            [~,max_loc] = max(smoothdata(NP_units.spk_phase2wbt_F_counts{nc,:},'movmean',3));
+            NP_units.spk2wbt_pref_phase(nc) = phase_ctrs(max_loc);                  % Preferred phase
+%                                 %=== Plotting (troubleshoot)
+%                                 if gof1.rsquare>gof2.rsquare
+%                                     plot(f1);    hold on;  bar(x1,y1,1,'EdgeColor','none'); hold off;   xticks()
+%                                     title(gof1.rsquare);
+%                                 else
+%                                     plot(f2);    hold on;  bar(x1,y1,1,'EdgeColor','none'); hold off;
+%                                     title(gof2.rsquare);
+%                                 end
+%                                   
+%                                 choice = questdlg('Continue', 'Class Verification','Yes', 'No', 'Stop','Yes');
+%                                 switch choice
+%                                     case 'Stop'
+%                                         break;
+%                                 end
+            
+            
+            % Fit also Tamir's phase distribution
+            %=== Fit with cosine function
+            x = [phase_ctrs,phase_ctrs+2*pi];
+            y = repmat(smoothdata(NP_units.spk_phase2tmr_F_counts{nc,:}','movmean',3),1,2);
+            x1 = x(~isnan(y));  y1 = y(~isnan(y));
+            y1 = normalize(y1-mean(y1),'range',[-1 1]);
+            [f1,gof1] = fit(x1',y1',cosEqn,'Start',[2 0],'Lower',[-inf 0]);
+            [f2,gof2] = fit(x1',y1',cosEqn,'Start',[1 0],'Lower',[-inf 0]);
+            
+            %=== Keep best fit
+            if gof1.rsquare>gof2.rsquare
+                NP_units.spk_phase2tmr_R2(nc) = gof1.rsquare;
+                NP_units.spk_phase2tmr_fit_par(nc,:) = coeffvalues(f1);
+                [NP_units.spk_phase2tmr_corrV(nc),NP_units.spk_phase2tmr_corrP(nc)] = corr(y1',f1(x1));
+            else
+                NP_units.spk_phase2tmr_R2(nc) = gof2.rsquare;
+                NP_units.spk_phase2tmr_fit_par(nc,:) = coeffvalues(f2);
+                [NP_units.spk_phase2tmr_corrV(nc),NP_units.spk_phase2tmr_corrP(nc)] = corr(y1',f2(x1));
+            end
+            NP_units.spk2tmr_p(nc) = circ_rtest(NP_units.spk_phase2tmr_F{nc,1});    % p value Rayleight test
+            [~,max_loc] = max(smoothdata(NP_units.spk_phase2tmr_F_counts{nc,:},'movmean',3));
+            NP_units.spk2tmr_pref_phase(nc) = phase_ctrs(max_loc);
+            
+        end
+        
+    end
+    
+end
+
+%% ECHOLOCATION PHASE
+for hide=1
+    
+    %=== Look at echolocation phase
+    N_flights = size(SWPs,1);
+    click_phase = [];
+    for zz=1:N_flights
+        cond = [SWPs.pos_real{zz,1}/SWPs.pos_real{zz,1}(end)>0.2 & SWPs.pos_real{zz,1}/SWPs.pos_real{zz,1}(end)<.8 & SWPs.clk{zz,1}];
+        click_phase  = [click_phase; SWPs.wbt_phase{zz,1}(cond)];
+    end
+    
+    %=== Plot phase
+    figure('units','normalized','outerposition',[.3 .3 .2 .25]);
+    tiledlayout(1,2,'TileSpacing','compact');
+    nexttile;   polarhistogram(click_phase,linspace(-pi,pi,70),'Normalization','probability','facealpha',.9,'edgecolor','none','FaceColor','k');
+    nexttile;   histogram([click_phase;click_phase+2*pi],unique([linspace(-pi,pi,40),linspace(pi,3*pi,40)]),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');
+    yticks([]); xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');
+    
+end
+
+%% LOOK AT AUTOCORRELOGRAMS AND PHASE PREFERENCES
+for hide=1
+    
+    %=== Define subset of cells of interest
+    %NP_sst = NP_units(NP_units.fr>0 & NP_units.nspkpf>0 & NP_units.place_cond & NP_units.spk2wbt_p<0.05,:);
+    NP_sst = NP_units(NP_units.fr>0 & NP_units.nspkpf>0 & NP_units.place_cond & NP_units.num_spikes_f>50,:);
+    N_cells = size(NP_sst,1); % Number of cells
+    
+    %=== Initialize relevant variables
+    AC = zeros(numel(NP_sst.AC{1,1}),N_cells);
+    AC_ctrs = NP_sst.AC_bins{1,1};
+    R2 = zeros(N_cells,1);
+    cos_par = zeros(N_cells,4);
+    spk2wbt_counts = zeros(numel(NP_sst.spk_phase2wbt_F_counts{1,:}),N_cells);
+    all2wbt_counts = zeros(numel(NP_sst.spk_phase2wbt_F_counts{1,:}),N_cells);
+    spk2wbt_nrmcts = zeros(numel(NP_sst.spk_phase2wbt_F_counts{1,:}),N_cells);
+    spk2tmr_counts = zeros(numel(NP_sst.spk_phase2tmr_F_counts{1,:}),N_cells);
+    all2tmr_counts = zeros(numel(NP_sst.spk_phase2tmr_F_counts{1,:}),N_cells);
+    spk2tmr_nrmcts = zeros(numel(NP_sst.spk_phase2tmr_F_counts{1,:}),N_cells);
+    phase_bins = NP_sst.phase_bins(1,:);
+    phase_ctrs = NP_sst.phase_bins(1,1:end-1)+mean(diff(NP_sst.phase_bins(1,:)))/2;
+    
+    %=== Accumulate data across cells
+    for nc=1:N_cells
+        
+        AC(:,nc) = NP_sst.AC{nc,1};
+        spk2wbt_counts(:,nc) = NP_sst.spk_phase2wbt_F_counts{nc,:};
+        all2wbt_counts(:,nc) = NP_sst.all_phase2wbt_counts{nc,:};
+        spk2wbt_nrmcts(:,nc) = NP_sst.spk_phase2wbt_F_counts{nc,:}-NP_sst.all_phase2wbt_counts{nc,:};
+        
+        spk2tmr_counts(:,nc) = NP_sst.spk_phase2tmr_F_counts{nc,:};
+        all2tmr_counts(:,nc) = NP_sst.all_phase2tmr_counts{nc,:};
+        spk2tmr_nrmcts(:,nc) = NP_sst.spk_phase2tmr_F_counts{nc,:}-NP_sst.all_phase2tmr_counts{nc,:};
+        
+    end
+    
+    %======================================================= Wingbeat phase analysis =============================================
+    %=== Impose specific conditions
+    cond = all([NP_sst.spk_phase2wbt_R2>0.0, NP_sst.num_spikes_f>50],2);
+    anlz = all([NP_sst.num_spikes_f>50],2);
+    %cond = all([NP_sst.spk_phase2wbt_corrP<0.05,NP_sst.spk_phase2wbt_corrV>0, NP_sst.num_spikes_f>50],2);
+    NP_sst.cond_PL = cond;
+    
+    %=== Fit average autocorrelogram
+    expEqn = 'a*exp(-b*x+c)+d';
+    x = AC_ctrs(AC_ctrs>0);
+    y1 = mean(AC(AC_ctrs>0,:   ),2,'omitnan');
+    y2 = mean(AC(AC_ctrs>0,cond),2,'omitnan');
+    f1 = fit(x,y1,expEqn,'Start',[max(y1) 1 0 0],'Lower',[0 -inf 0 0],'Exclude',x<0.125);
+    f2 = fit(x,y2,expEqn,'Start',[max(y2) 1 0 0],'Lower',[0 -inf 0 0],'Exclude',x<0.125);
+    [psd_f1,pxx] = pwelch(y1-f1(x),[],[],[],1/mean(diff(x)));
+    [psd_f2,~] = pwelch(y2-f2(x),[],[],[],1/mean(diff(x)));
+    [~,max_loc] = max(psd_f2);
+    
+    %=== Plot average autocorrelogram
+    figure('units','normalized','outerposition',[0.4 .5 0.25 .5]);
+    tiledlayout(2,3,'TileSpacing','tight');
+    nexttile;   area(AC_ctrs,mean(AC,2,'omitnan'),'FaceColor','k','EdgeColor','none','FaceAlpha',0.5);
+    yticks([]); xlabel('Time lag (s)'); hold on;
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--');
+    xlim([0 max(AC_ctrs)]); title('All Place Cells');
+    nexttile;   plot(x,smoothdata(y1-f1(x),'movmean',3),'LineWidth',3,'Color','k');   xlim([0.05 max(AC_ctrs)]);    hold on;
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--'); title('Residual');  yticks([]); xlabel('Time lag (s)');
+    sgtitle([num2str(sum(cond)),' neurons']);
+    nexttile;   plot(pxx,10*log10(psd_f1),'LineWidth',3,'Color','k'); hold on; plot(wb_freq*[1 1],ylim,'k--');    xlabel('Freq');
+    nexttile;   area(AC_ctrs,mean(AC(:,cond),2,'omitnan'),'FaceColor','b','EdgeColor','none','FaceAlpha',0.5);
+    yticks([]); xlabel('Time lag (s)'); hold on;    plot(x,f2(x));
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--');
+    xlim([0 max(AC_ctrs)]); title('Good Cells');
+    nexttile;   plot(x,smoothdata(y2-f2(x),'movmean',3),'LineWidth',3,'Color','b');   xlim([0.05 max(AC_ctrs)]);
+    yticks([]); xlabel('Time lag (s)'); hold on;
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--'); title('Residual');
+    nexttile;   plot(pxx,10*log10(psd_f2),'LineWidth',3,'Color','b'); hold on; plot(wb_freq*[1 1],ylim,'k--');    xlabel('Freq');
+    sgtitle([num2str(sum(cond)),'/',num2str(N_cells),' neurons']);
+    
+    disp(['Peak frequency autocorrelogram: ', num2str(pxx(max_loc),2), ' Hz']);
+    
+    %=== Plot average spike to wingbeat phase
+    figure('units','normalized','outerposition',[0.05 .1 0.25 .6]);
+    tiledlayout(3,3,'TileSpacing','tight');
+    phase2plot = repmat(median(spk2wbt_counts,2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'k','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('All Place Cells');
+    phase2plot = repmat(median(spk2wbt_counts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'b','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Good Cells');
+    phase2plot = repmat(median(all2wbt_counts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'g','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Random Spikes');
+    phase2plot = repmat(median(spk2wbt_nrmcts,2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'k','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Real - Random');
+    phase2plot = repmat(median(spk2wbt_nrmcts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'b','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Real - Random');
+    phase2plot = repmat(median(all2wbt_counts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   polarhistogram(NP_sst.spk2wbt_pref_phase,linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');              title('Preferred Phase (all)');
+    nexttile;   polarhistogram(NP_sst.spk_phase2wbt_fit_par(:,2),linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');      title('Fit param (all)');
+    nexttile;   polarhistogram(NP_sst.spk_phase2wbt_fit_par(cond,2),linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','b');   title('Fit param (good)');
+    nexttile;   polarhistogram(NP_sst.spk2wbt_pref_phase(cond),linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','r');        title('Preferred Phase (good)');
+    sgtitle([num2str(sum(cond)),'/',num2str(N_cells),' neurons']);
+    
+    %=== Display some quantifications
+    preferred_phase = NP_sst.spk2wbt_pref_phase(cond);
+    average_phase_cts = mean(spk2wbt_counts(:,cond),2,'omitnan')';
+    [~,max_loc] = max(average_phase_cts);
+    [circ_s, circ_s0] = circ_std(preferred_phase);
+    disp(['Fraction of Cells: ', num2str(sum(cond)/N_cells)]);
+    disp(['Median phase of max firing: ', num2str(rad2deg(circ_median(preferred_phase)),2),' p/m ', num2str(rad2deg(circ_s0)./sqrt(numel(preferred_phase)),2)    , ' degrees']);
+    disp(['Peak of mean firing phase: ', num2str(rad2deg(phase_ctrs(max_loc)),2),' degrees']);
+    
+    %=== Fit with cosine
+    x = [phase_ctrs,phase_ctrs+2*pi];
+    y = repmat(median(spk2wbt_counts(:,cond),2,'omitnan')',1,2);
+    x1 = x(~isnan(y));  y1 = y(~isnan(y));
+    y1 = normalize(y1-mean(y1),'range',[-1 1]);
+    [f1,gof1] = fit(x1',y1',cosEqn,'Start',[1 0],'Lower',[-inf 0]);
+    fit_coeff = coeffvalues(f1);
+    fit_coeff_int = confint(f1);
+    
+    figure;
+    plot(f1);    hold on;  bar(x1,y1,1,'EdgeColor','none','FaceColor','k'); legend('off');
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});
+    title(['Max at: ', num2str(rad2deg(fit_coeff(2)),3), '( ', num2str( rad2deg(fit_coeff_int(2,1)),3),'-',num2str( rad2deg(fit_coeff_int(2,2)),3),')']);
+    
+    %% === Plot phase locking for some example cells
+    rng(1);
+    subset = find(NP_sst.spk_phase2wbt_R2>0 & NP_sst.spk_phase2wbt_fit_par(:,1)<1.5);
+    subset = subset(randperm(numel(subset)));
+    %subset = find(NP_sst.spk2wbt_p<0.05);
+    figure('units','normalized','outerposition',[.5 0 .5 1]);
+    tiledlayout(10,10,'TileSpacing','tight');
+    for i=1:min(100,numel(subset))
+        nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],repmat(smoothdata(NP_sst.spk_phase2wbt_F_counts{subset(i),:}','movmean',3),1,2),1,'k','edgecolor','none');
+        xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});
+    end
+    title('Example Neurons');
+    
+    %=== Phase procession
+    NP_phlock = NP_sst(cond,:);
+    sum(NP_phlock.phase_prec)/numel(NP_phlock.phase_prec);
+    figure('units','normalized','outerposition',[.5 .2 .17 .3])
+    histogram(NP_phlock.phs_prc_asym,[0:0.1:1]);   xlabel('Asymmetry level');
+    
+    
+    %========================================== SINGLE ANIMAL STATISTICS =======================================
+    %=== Unique bat IDs
+    unique_batIDs = unique(NP_sst.unique_ID(:,2),'stable');   % Get the unique bat IDs (as they appear)
+    N_bats = numel(unique_batIDs);                               % Number of different bats
+    
+    %=== Replay Features
+    SBC = {};                                                   % Cell array for accumulating the single session values
+    for j=1:N_bats
+        NP_sst_single_bat = NP_sst(strcmp(NP_sst.unique_ID(:,2),unique_batIDs(j)),:);
+        [~,~,NP_sst_single_bat.sessionID] =  unique(string(NP_sst_single_bat.unique_ID(:,3)),'rows');
+        bat_info_summary = groupsummary(NP_sst_single_bat,'sessionID','mean',{'cond_PL'});
+        
+        SBC{j,1} = bat_info_summary.mean_cond_PL;
+        
+        NP_phlock_single_bat = NP_phlock(strcmp(NP_phlock.unique_ID(:,2),unique_batIDs(j)),:);
+        [~,~,NP_phlock_single_bat.sessionID] =  unique(string(NP_phlock_single_bat.unique_ID(:,3)),'rows');
+        bat_info_summary = groupsummary(NP_phlock_single_bat,'sessionID','mean',{'phase_prec'});
+        
+        SBC{j,2} = bat_info_summary.mean_phase_prec;
+        
+    end
+    figure('units','normalized','outerposition',[.1 .3 .1 .3]); plot_distr_multi_AF_v1(SBC(:,1), unique_batIDs', 'SEM', 'Fraction Phase Locked','box');   ylim_tmp = ylim;    ylim([0 1]);
+    figure('units','normalized','outerposition',[.2 .3 .1 .3]); plot_distr_multi_AF_v1(SBC(:,2), unique_batIDs', 'SEM', 'Fraction Phase Precession','box');   ylim_tmp = ylim;    ylim([0 1]);
+    %========================================== =============== =======================================
+    
+    
+    
+    
+    
+    
+    %% =================================================== Tamir's phase analysis ======================================================================
+    %=== Impose specific conditions
+    cond = all([NP_sst.spk_phase2tmr_R2>0, NP_sst.num_spikes_f>50],2);
+    %cond = all([NP_sst.spk_phase2tmr_corrP<0.05,NP_sst.spk_phase2tmr_corrV>0, NP_sst.num_spikes_f>50],2);
+
+    
+    %=== Fit average autocorrelogram
+    expEqn = 'a*exp(-b*x+c)+d';
+    x = AC_ctrs(AC_ctrs>0);
+    y1 = mean(AC(AC_ctrs>0,:   ),2,'omitnan');
+    y2 = mean(AC(AC_ctrs>0,cond),2,'omitnan');
+    f1 = fit(x,y1,expEqn,'Start',[max(y1) 1 0 0],'Lower',[0 -inf 0 0],'Exclude',x<0.125);
+    f2 = fit(x,y2,expEqn,'Start',[max(y2) 1 0 0],'Lower',[0 -inf 0 0],'Exclude',x<0.125);
+    [psd_f1,pxx] = pwelch(y1-f1(x),[],[],[],1/mean(diff(x)));
+    [psd_f2,~] = pwelch(y2-f2(x),[],[],[],1/mean(diff(x)));
+    [~,max_loc] = max(psd_f2);
+    
+    %=== Plot average autocorrelogram
+    figure('units','normalized','outerposition',[0.4 .5 0.25 .5]);
+    tiledlayout(2,3,'TileSpacing','tight');
+    nexttile;   area(AC_ctrs,mean(AC,2,'omitnan'),'FaceColor','k','EdgeColor','none','FaceAlpha',0.5);
+    yticks([]); xlabel('Time lag (s)'); hold on;
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--');
+    xlim([0 max(AC_ctrs)]); title('All Place Cells');
+    nexttile;   plot(x,smoothdata(y1-f1(x),'movmean',3),'LineWidth',3,'Color','k');   xlim([0.05 max(AC_ctrs)]);    hold on;
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--'); title('Residual');  yticks([]); xlabel('Time lag (s)');
+    sgtitle([num2str(sum(cond)),' neurons']);
+    nexttile;   plot(pxx,10*log10(psd_f1),'LineWidth',3,'Color','k'); hold on; plot(wb_freq*[1 1],ylim,'k--');    xlabel('Freq');
+    nexttile;   area(AC_ctrs,mean(AC(:,cond),2,'omitnan'),'FaceColor','b','EdgeColor','none','FaceAlpha',0.5);
+    yticks([]); xlabel('Time lag (s)'); hold on;    plot(x,f2(x));
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--');
+    xlim([0 max(AC_ctrs)]); title('Good Cells');
+    nexttile;   plot(x,smoothdata(y2-f2(x),'movmean',3),'LineWidth',3,'Color','b');   xlim([0.05 max(AC_ctrs)]);
+    yticks([]); xlabel('Time lag (s)'); hold on;
+    plot(repmat(1/wb_freq*[-3:3],2,1),repmat(ylim,7,1)','k--'); title('Residual');
+    nexttile;   plot(pxx,10*log10(psd_f2),'LineWidth',3,'Color','b'); hold on; plot(wb_freq*[1 1],ylim,'k--');    xlabel('Freq');
+    sgtitle([num2str(sum(cond)),'/',num2str(N_cells),' neurons']);
+    
+    disp(['Peak frequency autocorrelogram: ', num2str(pxx(max_loc),2), ' Hz']);
+    
+    %=== Plot average spike to wingbeat phase
+    figure('units','normalized','outerposition',[0.05 .1 0.25 .6]);
+    tiledlayout(3,3,'TileSpacing','tight');
+    phase2plot = repmat(median(spk2tmr_counts,2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'k','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('All Place Cells');
+    phase2plot = repmat(median(spk2tmr_counts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'b','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Good Cells');
+    phase2plot = repmat(median(all2tmr_counts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'g','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Random Spikes');
+    phase2plot = repmat(median(spk2tmr_nrmcts,2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'k','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Real - Random');
+    phase2plot = repmat(median(spk2tmr_nrmcts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],smoothdata(phase2plot,'movmean',2),1,'b','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Real - Random');
+    phase2plot = repmat(median(all2tmr_counts(:,cond),2,'omitnan')',1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   polarhistogram(NP_sst.spk2tmr_pref_phase,linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');              title('Preferred Phase (all)');
+    nexttile;   polarhistogram(NP_sst.spk_phase2tmr_fit_par(:,2),linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');      title('Fit param (all)');
+    nexttile;   polarhistogram(NP_sst.spk_phase2tmr_fit_par(cond,2),linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','b');   title('Fit param (good)');
+    nexttile;   polarhistogram(NP_sst.spk2tmr_pref_phase(cond),linspace(-pi,pi,20),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','r');        title('Preferred Phase (good)');
+    sgtitle([num2str(sum(cond)),'/',num2str(N_cells),' neurons']);
+    
+    %=== Display some quantifications
+    preferred_phase = NP_sst.spk2tmr_pref_phase(cond);
+    average_phase_cts = mean(spk2tmr_counts(:,cond),2,'omitnan')';
+    [~,max_loc] = max(average_phase_cts);
+    [circ_s, circ_s0] = circ_std(preferred_phase);
+    disp(['Fraction of Cells: ', num2str(sum(cond)/N_cells)]);
+    disp(['Median phase of max firing: ', num2str(rad2deg(circ_median(preferred_phase)),2),' p/m ', num2str(rad2deg(circ_s0)./sqrt(numel(preferred_phase)),2)    , ' degrees']);
+    disp(['Peak of mean firing phase: ', num2str(rad2deg(phase_ctrs(max_loc)),2),' degrees']);
+    
+    %=== Fit with cosine
+    x = [phase_ctrs,phase_ctrs+2*pi];
+    y = repmat(median(spk2tmr_counts(:,cond),2,'omitnan')',1,2);
+    x1 = x(~isnan(y));  y1 = y(~isnan(y));
+    y1 = normalize(y1-mean(y1),'range',[-1 1]);
+    [f1,gof1] = fit(x1',y1',cosEqn,'Start',[1 0],'Lower',[-inf 0]);
+    fit_coeff = coeffvalues(f1);
+    fit_coeff_int = confint(f1);
+    
+    figure;
+    plot(f1);    hold on;  bar(x1,y1,1,'EdgeColor','none','FaceColor','k'); legend('off');
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});
+    title(['Max at: ', num2str(rad2deg(fit_coeff(2)),3), '( ', num2str( rad2deg(fit_coeff_int(2,1)),3),'-',num2str( rad2deg(fit_coeff_int(2,2)),3),')'])
+    
+    %=== Plot phase locking for some example cells
+    rng(1);
+    subset = find(NP_sst.spk_phase2tmr_R2>0 & NP_sst.spk_phase2tmr_fit_par(:,1)<1.5);
+    subset = subset(randperm(numel(subset)));
+    %subset = find(NP_sst.spk2wbt_p<0.05);
+    figure('units','normalized','outerposition',[.5 0 .5 1]);
+    tiledlayout(10,10,'TileSpacing','tight');
+    for i=1:min(100,numel(subset))
+        nexttile;   bar([phase_ctrs,phase_ctrs+2*pi],repmat(smoothdata(NP_sst.spk_phase2wbt_F_counts{subset(i),:}','movmean',3),1,2),1,'k','edgecolor','none');
+        xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});
+    end
+    title('Example Neurons');
+    
+    %=== Show overlap between Wingbeat and Tamir's phase locked cells and look at correlations
+    cond_1 = all([NP_sst.spk_phase2wbt_R2>0, NP_sst.num_spikes_f>50],2);    A1 = sum(cond_1); 
+    cond_2 = all([NP_sst.spk_phase2tmr_R2>0, NP_sst.num_spikes_f>50],2);    A2 = sum(cond_2);
+    
+    figure('units','normalized','outerposition',[.3 0.5 .3 .3]);
+    nexttile;
+    vennDiagram2_AF_v0(A1,A2,sum(cond_1 & cond_2));  title([]);   legend(['Wingbeat (n=', num2str(A1),')'],['Non-oscillatory (n=', num2str(A2),')']);   axis off;
+    title(['All Place Cells = ', num2str(N_cells)]);
+    nexttile;   scatter(NP_sst.spk2wbt_pref_phase(cond_1 & cond_2),NP_sst.spk2tmr_pref_phase(cond_1 & cond_2),'MarkerFaceColor','b','MarkerEdgeColor','none','MarkerFaceAlpha',.5)
+    xlabel('Pref. Wingbeat Phase'); ylabel('Pref. Non-oscillatory Phase');  xlim([-4 4]);   ylim([-4 4]); 
+    
+    
+    
+end
+
+%% THETA-SWEEPS AND WINGBEAT
+for hide=1
+    
+    %=== Select subtable of good flights
+    warning('off');
+    SWPs_sst = SWPs(SWPs.rmsDec_error<2 & SWPs.prc_decoded>0.5,:);
+    
+    %=== Params and initialize relevant variables
+    n_swp_shuffles = 10;             % Default 20
+    n_reshape = 50;                 % Default 50
+    smooth_f = [1 .3];              % [space bin,time bin]
+    N_flights = size(SWPs_sst,1);   % Number of flights
+    max_int_shift = round(0.120/mean(diff(SWPs_sst.bin_time{1,1})));    % Random shift for shuffling
+    single_SWP_sh_cell = {};
+    
+    %=== Real data, Cut at wingbeat maxima
+    single_SWP_rl = table();   counter=1;
+    for zz=1:N_flights
+        
+        %=== Find wingbeat minima
+        zero_phs_idx = find(SWPs_sst.wbt_phase{zz,1}(1:end-1).* SWPs_sst.wbt_phase{zz,1}(2:end)<0 & diff(SWPs_sst.wbt_phase{zz,1})<0);  % Segment based on wingbeat
+        sweep_strt = zero_phs_idx(1:end-1); sweep_stop = zero_phs_idx(2:end);
+        N_spatial_bins = size(SWPs_sst.p_dec_flight{zz,1},1);
+        spt_bin_ids = [1:N_spatial_bins]';
+        
+        %=== Real data
+        for ss=1:numel(sweep_strt)
+            
+            swp_interval = sweep_strt(ss):sweep_stop(ss);
+            
+            %=== Basic features of the sweep
+            single_SWP_rl.flight_ID(counter) = zz;
+            single_SWP_rl.rms_dec(counter) = SWPs_sst.rmsDec_error(zz);
+            single_SWP_rl.prc_dec(counter) = SWPs_sst.prc_decoded(zz);
+            
+            %=== Raw, filtered, shifted and rehaped posterior
+            single_SWP_rl.raw_posterior(counter) = {SWPs_sst.p_dec_flight{zz,1}(:,swp_interval)};
+            %single_SWP_rl.sft_posterior(counter_sh) = {imgaussfilt(SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval),smooth_f)};
+            single_SWP_rl.sft_posterior(counter) = {SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval)};
+            single_SWP_rl.rsp_posterior(counter) = {imresize(single_SWP_rl.sft_posterior{counter,1},[size(single_SWP_rl.sft_posterior{counter,1},1),n_reshape])};
+            
+            %=== Spike density, wingbeat, LFP, Tamir's phase echolocation and phase
+            single_SWP_rl.rsz_spk_dsty(counter) = {interp1(SWPs_sst.spk_dsty{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.spk_dsty{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.wbt_power(counter) = {SWPs_sst.wbt_power{zz,1}(swp_interval)};
+            single_SWP_rl.rsz_LFP(counter) = {interp1(SWPs_sst.LFP{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.LFP{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.rsz_wbt(counter) = {interp1(SWPs_sst.wbt{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.fract_pos(counter) = {SWPs_sst.pos_real{zz,1}(swp_interval)/SWPs_sst.pos_real{zz,1}(end)};
+            single_SWP_rl.rsz_clk(counter) = {interp1(SWPs_sst.clk{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.clk{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.rsz_wbt_phase(counter) = {interp1(SWPs_sst.wbt_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt_phase{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.rsz_tmr_phase(counter) = {interp1(SWPs_sst.tmr_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.tmr_phase{zz,1}(swp_interval)),n_reshape)')};
+            
+            %=== Add some features of the single cycle
+            single_SWP_rl.mean_spk_dsty(counter) = mean(single_SWP_rl.rsz_spk_dsty{counter,1});   % Average spike density
+            single_SWP_rl.mean_fract_pos(counter) = mean(single_SWP_rl.fract_pos{counter,1}); % Average phase of the flight
+            
+            %=== Add some features of the posterior
+            [max_p,max_loc] = max(single_SWP_rl.rsp_posterior{counter,1},[],1);        % Location of max posterior
+            cnt_mass = spt_bin_ids'*single_SWP_rl.rsp_posterior{counter,1};            % Center of mass
+            single_SWP_rl.med_jmp_distance(counter) = median(abs(diff(cnt_mass)));     % Median jump distance with center of mass
+            single_SWP_rl.mean_jmp_distance(counter) = mean(abs(diff(max_loc)));       % Mean jump distance with loc of max posterior
+            single_SWP_rl.med_max_post(counter) = mean(max_p);                         % Average max posterior
+            single_SWP_rl.est_dist1(counter) = {(cnt_mass-N_spatial_bins/2)*bin_size_1D};  % Decoding error, reshaped and in m (center of mass)
+            single_SWP_rl.est_dist2(counter) = {(max_loc-N_spatial_bins/2)*bin_size_1D};   % Decoding error, reshaped and in m (max posterior)
+            
+            counter=counter+1;
+        end
+        
+    end
+    
+    %=== Shuffled data, Cut at random points
+    for jjj=1:n_swp_shuffles
+        single_SWP_sh = table();   counter_sh=1;
+        for zz=1:N_flights
+            
+            %=== Find wingbeat minima
+            zero_phs_idx = find(SWPs_sst.wbt_phase{zz,1}(1:end-1).* SWPs_sst.wbt_phase{zz,1}(2:end)<0 & diff(SWPs_sst.wbt_phase{zz,1})<0);  % Segment based on wingbeat
+            sweep_strt = zero_phs_idx(1:end-1); sweep_stop = zero_phs_idx(2:end);
+            N_spatial_bins = size(SWPs_sst.p_dec_flight{zz,1},1);
+            spt_bin_ids = [1:N_spatial_bins]';
+            
+            %=== Shuffling procedure
+            rand_shift =  -round(max_int_shift/2)+randi(max_int_shift,numel(sweep_strt),1);
+            sweep_strt_sh = sweep_strt+rand_shift; sweep_stop_sh = sweep_stop+rand_shift;
+            sweep_strt = sweep_strt_sh(sweep_strt_sh>1 & sweep_stop_sh<size(SWPs_sst.wbt_phase{zz,1},1));
+            sweep_stop = sweep_stop_sh(sweep_strt_sh>1 & sweep_stop_sh<size(SWPs_sst.wbt_phase{zz,1},1));
+            
+            %=== Shuffle data
+            for ss=1:numel(sweep_strt)
+                
+                swp_interval = sweep_strt(ss):sweep_stop(ss);
+                
+                %=== Basic features of the sweep
+                single_SWP_sh.flight_ID(counter) = zz;
+                single_SWP_sh.rms_dec(counter) = SWPs_sst.rmsDec_error(zz);
+                single_SWP_sh.prc_dec(counter) = SWPs_sst.prc_decoded(zz);
+                
+                %=== Raw, filtered, shifted and rehaped posterior
+                single_SWP_sh.raw_posterior(counter) = {SWPs_sst.p_dec_flight{zz,1}(:,swp_interval)};
+                %single_SWP_sh.sft_posterior(counter_sh) = {imgaussfilt(SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval),smooth_f)};
+                single_SWP_sh.sft_posterior(counter) = {SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval)};
+                single_SWP_sh.rsp_posterior(counter) = {imresize(single_SWP_sh.sft_posterior{counter,1},[size(single_SWP_sh.sft_posterior{counter,1},1),n_reshape])};
+                
+                %=== Spike density, wingbeat, LFP, Tamir's phase echolocation and phase
+                single_SWP_sh.rsz_spk_dsty(counter) = {interp1(SWPs_sst.spk_dsty{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.spk_dsty{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.wbt_power(counter) = {SWPs_sst.wbt_power{zz,1}(swp_interval)};
+                single_SWP_sh.rsz_LFP(counter) = {interp1(SWPs_sst.LFP{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.LFP{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.rsz_wbt(counter) = {interp1(SWPs_sst.wbt{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.fract_pos(counter) = {SWPs_sst.pos_real{zz,1}(swp_interval)/SWPs_sst.pos_real{zz,1}(end)};
+                single_SWP_sh.rsz_clk(counter) = {interp1(SWPs_sst.clk{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.clk{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.rsz_wbt_phase(counter) = {interp1(SWPs_sst.wbt_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt_phase{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.rsz_tmr_phase(counter) = {interp1(SWPs_sst.tmr_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.tmr_phase{zz,1}(swp_interval)),n_reshape)')};
+                
+                %=== Add some features of the single cycle
+                single_SWP_sh.mean_spk_dsty(counter) = mean(single_SWP_sh.rsz_spk_dsty{counter,1});   % Average spike density
+                single_SWP_sh.mean_fract_pos(counter) = mean(single_SWP_sh.fract_pos{counter,1}); % Average phase of the flight
+                
+                %=== Add some features of the posterior
+                [max_p,max_loc] = max(single_SWP_sh.rsp_posterior{counter,1},[],1);        % Location of max posterior
+                cnt_mass = spt_bin_ids'*single_SWP_sh.rsp_posterior{counter,1};            % Center of mass
+                single_SWP_sh.med_jmp_distance(counter) = median(abs(diff(cnt_mass)));     % Median jump distance with center of mass
+                single_SWP_sh.mean_jmp_distance(counter) = mean(abs(diff(max_loc)));       % Mean jump distance with loc of max posterior
+                single_SWP_sh.med_max_post(counter) = mean(max_p);                         % Average max posterior
+                single_SWP_sh.est_dist1(counter) = {(cnt_mass-N_spatial_bins/2)*bin_size_1D};  % Decoding error, reshaped and in m (center of mass)
+                single_SWP_sh.est_dist2(counter) = {(max_loc-N_spatial_bins/2)*bin_size_1D};   % Decoding error, reshaped and in m (max posterior)
+                
+                counter=counter+1;
+            end
+        end
+        single_SWP_sh_cell = [single_SWP_sh_cell;{single_SWP_sh}];
+    end
+    warning('on');
+    
+    %%
+    %=== Extract subset using defined criteria (exclude flight tails, epochs of low firing and flat sweeps)
+    min_pos1 = 0.15;
+    min_pos2 = 0.85;
+    min_rms = 1.3;
+    min_prc = 0.7;
+    min_mjp = 0.0;
+    min_mp = 0.0;
+    
+    SWP_sst_rl = single_SWP_rl(single_SWP_rl.mean_fract_pos>min_pos1 & single_SWP_rl.mean_fract_pos<min_pos2 & single_SWP_rl.rms_dec<min_rms & single_SWP_rl.prc_dec>min_prc & single_SWP_rl.mean_jmp_distance>min_mjp & single_SWP_rl.med_max_post>min_mp,:);
+    N_sweeps_rl = size(SWP_sst_rl,1);
+    
+    %=== Calculate averages and STDs (REAL DATA)
+    est_dist_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_spk_dsty_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_wbt_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_LFP_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_clk_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_wbt_phase_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_tmr_phase_rl = zeros(n_reshape,N_sweeps_rl);
+    for i=1:N_sweeps_rl
+        est_dist_rl(:,i) = SWP_sst_rl.est_dist1{i,1};
+        rsz_spk_dsty_rl(:,i) = SWP_sst_rl.rsz_spk_dsty{i,1};
+        rsz_wbt_rl(:,i) = SWP_sst_rl.rsz_wbt{i,1};
+        rsz_LFP_rl(:,i) = SWP_sst_rl.rsz_LFP{i,1};
+        rsz_clk_rl(:,i) = SWP_sst_rl.rsz_clk{i,1};
+        rsz_wbt_phase_rl(:,i) = SWP_sst_rl.rsz_wbt_phase{i,1};
+        rsz_tmr_phase_rl(:,i) = SWP_sst_rl.rsz_tmr_phase{i,1};
+    end
+    avg_est_dist_rl = mean(est_dist_rl,2);            sem_est_dist_rl = std(est_dist_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_spk_dsty_rl = mean(rsz_spk_dsty_rl,2);    sem_rsz_spk_dsty_rl = std(rsz_spk_dsty_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_wbt_rl = mean(rsz_wbt_rl,2);              sem_rsz_wbt_rl = std(rsz_wbt_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_LFP_rl = mean(rsz_LFP_rl,2);              sem_rsz_LFP_rl = std(rsz_LFP_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_wbt_phase_rl = mean(rsz_wbt_phase_rl,2);  sem_rsz_wbt_phase_rl = std(rsz_wbt_phase_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_tmr_phase_rl = mean(rsz_tmr_phase_rl,2);  sem_rsz_tmr_phase_rl = std(rsz_tmr_phase_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_clk_rl = mean(rsz_clk_rl,2);              sem_rsz_clk_rl = std(rsz_clk_rl,[],2)/sqrt(N_sweeps_rl);
+    
+    %=== Calculate averages and STDs (SHUFFLED DATA)
+    avg_est_dist_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_spk_dsty_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_wbt_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_LFP_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_wbt_phase_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_tmr_phase_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_clk_sh_all = zeros(n_reshape,n_swp_shuffles);
+    for jjj=1:n_swp_shuffles
+        
+        single_SWP_sh = single_SWP_sh_cell{jjj};
+        SWP_sst_sh = single_SWP_sh(single_SWP_sh.mean_fract_pos>min_pos1 & single_SWP_sh.mean_fract_pos<min_pos2 & single_SWP_sh.rms_dec<min_rms & single_SWP_sh.prc_dec>min_prc & single_SWP_sh.mean_jmp_distance>min_mjp & single_SWP_sh.med_max_post>min_mp,:);
+        N_sweeps_sh = size(SWP_sst_sh,1);
+       
+        est_dist_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_spk_dsty_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_wbt_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_LFP_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_clk_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_wbt_phase_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_tmr_phase_sh = zeros(n_reshape,N_sweeps_sh);
+        for i=1:N_sweeps_sh
+            est_dist_sh(:,i) = SWP_sst_sh.est_dist1{i,1};
+            rsz_spk_dsty_sh(:,i) = SWP_sst_sh.rsz_spk_dsty{i,1};
+            rsz_wbt_sh(:,i) = SWP_sst_sh.rsz_wbt{i,1};
+            rsz_LFP_sh(:,i) = SWP_sst_sh.rsz_LFP{i,1};
+            rsz_clk_sh(:,i) = SWP_sst_sh.rsz_clk{i,1};
+            rsz_wbt_phase_sh(:,i) = SWP_sst_sh.rsz_wbt_phase{i,1};
+            rsz_tmr_phase_sh(:,i) = SWP_sst_sh.rsz_tmr_phase{i,1};
+        end
+        avg_est_dist_sh_all(:,jjj) = mean(est_dist_sh,2);            
+        avg_rsz_spk_dsty_sh_all(:,jjj) = mean(rsz_spk_dsty_sh,2);    
+        avg_rsz_wbt_sh_all(:,jjj) = mean(rsz_wbt_sh,2);              
+        avg_rsz_LFP_sh_all(:,jjj) = mean(rsz_LFP_sh,2);              
+        avg_rsz_wbt_phase_sh_all(:,jjj) = mean(rsz_wbt_phase_sh,2);
+        avg_rsz_tmr_phase_sh_all(:,jjj) = mean(rsz_tmr_phase_sh,2);
+        avg_rsz_clk_sh_all(:,jjj) = mean(rsz_clk_sh,2);              
+    end
+    
+    %=== Average shuffles
+    avg_est_dist_sh = mean(avg_est_dist_sh_all,2);            sem_est_dist_sh = std(avg_est_dist_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_spk_dsty_sh = mean(avg_rsz_spk_dsty_sh_all,2);    sem_rsz_spk_dsty_sh = std(avg_rsz_spk_dsty_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_wbt_sh = mean(avg_rsz_wbt_sh_all,2);              sem_rsz_wbt_sh = std(avg_rsz_wbt_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_LFP_sh = mean(avg_rsz_LFP_sh_all,2);              sem_rsz_LFP_sh = std(avg_rsz_LFP_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_wbt_phase_sh = mean(avg_rsz_wbt_phase_sh_all,2);  sem_rsz_wbt_phase_sh = std(avg_rsz_wbt_phase_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_tmr_phase_sh = mean(avg_rsz_tmr_phase_sh_all,2);  sem_rsz_tmr_phase_sh = std(avg_rsz_tmr_phase_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_clk_sh = mean(avg_rsz_clk_sh_all,2);              sem_rsz_clk_sh = std(avg_rsz_clk_sh_all,[],2)/sqrt(n_swp_shuffles);
+    
+    %=== Define bins and find peak decoding error phase
+    rsz_bin_ctrs = linspace(-180,180,n_reshape);
+    [max_val,max_loc] = max(avg_est_dist_rl);                rsz_bin_ctrs(max_loc);
+    sum(abs(diff(SWP_sst_rl.flight_ID)))+1;
+    
+    %=== Calculate significance trace
+    pVal_est_dist = sum(avg_est_dist_rl<avg_est_dist_sh_all,2)./n_swp_shuffles;
+    
+    %=== Show averages
+    figure('units','normalized','outerposition',[.3 .3 .5 .3]);
+    tiledlayout(1,7,'TileSpacing','compact');
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_est_dist_sh,avg_est_dist_sh-sem_est_dist_sh,avg_est_dist_sh+sem_est_dist_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_est_dist_rl,avg_est_dist_rl-sem_est_dist_rl,avg_est_dist_rl+sem_est_dist_rl,[.9 .5 .2]);
+    plot(rsz_bin_ctrs(pVal_est_dist<0.05),max(avg_est_dist_rl)*ones(size(rsz_bin_ctrs(pVal_est_dist<0.05))),'*');
+    xticks([-170 0 170]);    title('Average Decoding Error');    plot(0*[1 1],ylim,'k--'); xlim('tight');   xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_spk_dsty_sh,avg_rsz_spk_dsty_sh-sem_rsz_spk_dsty_sh,avg_rsz_spk_dsty_sh+sem_rsz_spk_dsty_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_spk_dsty_rl,avg_rsz_spk_dsty_rl-sem_rsz_spk_dsty_rl,avg_rsz_spk_dsty_rl+sem_rsz_spk_dsty_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Average Spike Density');    plot(0*[1 1],ylim,'k--'); xlim('tight');    xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_LFP_sh,avg_rsz_LFP_sh-sem_rsz_LFP_sh,avg_rsz_LFP_sh+sem_rsz_LFP_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_LFP_rl,avg_rsz_LFP_rl-sem_rsz_LFP_rl,avg_rsz_LFP_rl+sem_rsz_LFP_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Average LFP');    plot(0*[1 1],ylim,'k--'); xlim('tight');              xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_clk_sh,avg_rsz_clk_sh-sem_rsz_clk_sh,avg_rsz_clk_sh+sem_rsz_clk_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_clk_rl,avg_rsz_clk_rl-sem_rsz_clk_rl,avg_rsz_clk_rl+sem_rsz_clk_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Average Call Rate');    plot(0*[1 1],ylim,'k--'); xlim('tight');        xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_phase_sh,avg_rsz_wbt_phase_sh-sem_rsz_wbt_phase_sh,avg_rsz_wbt_phase_sh+sem_rsz_wbt_phase_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_phase_rl,avg_rsz_wbt_phase_rl-sem_rsz_wbt_phase_rl,avg_rsz_wbt_phase_rl+sem_rsz_wbt_phase_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Wingbeat Phase');    plot(0*[1 1],ylim,'k--'); xlim('tight');           xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_sh,avg_rsz_wbt_sh-sem_rsz_wbt_sh,avg_rsz_wbt_sh+sem_rsz_wbt_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_rl,avg_rsz_wbt_rl-sem_rsz_wbt_rl,avg_rsz_wbt_rl+sem_rsz_wbt_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Accelerometer');    plot(0*[1 1],ylim,'k--'); xlim('tight');           xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_tmr_phase_sh,avg_rsz_tmr_phase_sh-sem_rsz_tmr_phase_sh,avg_rsz_tmr_phase_sh+sem_rsz_tmr_phase_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_tmr_phase_rl,avg_rsz_tmr_phase_rl-sem_rsz_tmr_phase_rl,avg_rsz_tmr_phase_rl+sem_rsz_tmr_phase_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Tamir s Phase');    plot(0*[1 1],ylim,'k--'); xlim('tight');           xlim([-170; 170]);
+    sgtitle(['Average of ',num2str(N_sweeps_rl),' cycles, from ',num2str(numel(unique(SWP_sst_rl.flight_ID))),' flights']);
+    
+end
+
+%% THETA-SWEEPS AND WINGBEAT (TAMIR'S)
+for hide=1
+    
+    %=== Select subtable of good flights
+    warning('off');
+    SWPs_sst = SWPs(SWPs.rmsDec_error<2 & SWPs.prc_decoded>0.5,:);
+    
+    %=== Params and initialize relevant variables
+    n_swp_shuffles = 10;            % Default 20
+    n_reshape = 50;                 % Default 50
+    smooth_f = [1 .3];              % [space bin,time bin]
+    N_flights = size(SWPs_sst,1);   % Number of flights
+    max_int_shift = round(0.120/mean(diff(SWPs_sst.bin_time{1,1})));    % Random shift for shuffling
+    single_SWP_sh_cell = {};
+    
+    %=== Real data, Cut at wingbeat maxima
+    single_SWP_rl = table();   counter=1;
+    for zz=1:N_flights
+        
+        %=== Find wingbeat minima
+        %zero_phs_idx = find(SWPs_sst.wbt_phase{zz,1}(1:end-1).* SWPs_sst.wbt_phase{zz,1}(2:end)<0 & diff(SWPs_sst.wbt_phase{zz,1})<0);  % Segment based on wingbeat
+        zero_phs_idx = find(SWPs_sst.tmr_phase{zz,1}(1:end-1).* SWPs_sst.tmr_phase{zz,1}(2:end)<0 & diff(SWPs_sst.tmr_phase{zz,1})<0); % Segment based on Tamir's phase
+        sweep_strt = zero_phs_idx(1:end-1); sweep_stop = zero_phs_idx(2:end);
+        N_spatial_bins = size(SWPs_sst.p_dec_flight{zz,1},1);
+        spt_bin_ids = [1:N_spatial_bins]';
+        
+        %=== Real data
+        for ss=1:numel(sweep_strt)
+            
+            swp_interval = sweep_strt(ss):sweep_stop(ss);
+            
+            %=== Basic features of the sweep
+            single_SWP_rl.flight_ID(counter) = zz;
+            single_SWP_rl.rms_dec(counter) = SWPs_sst.rmsDec_error(zz);
+            single_SWP_rl.prc_dec(counter) = SWPs_sst.prc_decoded(zz);
+            
+            %=== Raw, filtered, shifted and rehaped posterior
+            single_SWP_rl.raw_posterior(counter) = {SWPs_sst.p_dec_flight{zz,1}(:,swp_interval)};
+            %single_SWP_rl.sft_posterior(counter_sh) = {imgaussfilt(SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval),smooth_f)};
+            single_SWP_rl.sft_posterior(counter) = {SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval)};
+            single_SWP_rl.rsp_posterior(counter) = {imresize(single_SWP_rl.sft_posterior{counter,1},[size(single_SWP_rl.sft_posterior{counter,1},1),n_reshape])};
+            
+            %=== Spike density, wingbeat, LFP, Tamir's phase echolocation and phase
+            single_SWP_rl.rsz_spk_dsty(counter) = {interp1(SWPs_sst.spk_dsty{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.spk_dsty{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.wbt_power(counter) = {SWPs_sst.wbt_power{zz,1}(swp_interval)};
+            single_SWP_rl.rsz_LFP(counter) = {interp1(SWPs_sst.LFP{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.LFP{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.rsz_wbt(counter) = {interp1(SWPs_sst.wbt{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.fract_pos(counter) = {SWPs_sst.pos_real{zz,1}(swp_interval)/SWPs_sst.pos_real{zz,1}(end)};
+            single_SWP_rl.rsz_clk(counter) = {interp1(SWPs_sst.clk{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.clk{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.rsz_wbt_phase(counter) = {interp1(SWPs_sst.wbt_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt_phase{zz,1}(swp_interval)),n_reshape)')};
+            single_SWP_rl.rsz_tmr_phase(counter) = {interp1(SWPs_sst.tmr_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.tmr_phase{zz,1}(swp_interval)),n_reshape)')};
+            
+            %=== Add some features of the single cycle
+            single_SWP_rl.mean_spk_dsty(counter) = mean(single_SWP_rl.rsz_spk_dsty{counter,1});     % Average spike density
+            single_SWP_rl.mean_fract_pos(counter) = mean(single_SWP_rl.fract_pos{counter,1});       % Average phase of the flight
+            single_SWP_rl.mean_tmr_power(counter) = mean(SWPs_sst.tmr_power{zz,1}(swp_interval));   % Average Tamir's power
+            
+            %=== Add some features of the posterior
+            [max_p,max_loc] = max(single_SWP_rl.rsp_posterior{counter,1},[],1);        % Location of max posterior
+            cnt_mass = spt_bin_ids'*single_SWP_rl.rsp_posterior{counter,1};            % Center of mass
+            single_SWP_rl.med_jmp_distance(counter) = median(abs(diff(cnt_mass)));     % Median jump distance with center of mass
+            single_SWP_rl.mean_jmp_distance(counter) = mean(abs(diff(max_loc)));       % Mean jump distance with loc of max posterior
+            single_SWP_rl.med_max_post(counter) = mean(max_p);                         % Average max posterior
+            single_SWP_rl.est_dist1(counter) = {(cnt_mass-N_spatial_bins/2)*bin_size_1D};  % Decoding error, reshaped and in m (center of mass)
+            single_SWP_rl.est_dist2(counter) = {(max_loc-N_spatial_bins/2)*bin_size_1D};   % Decoding error, reshaped and in m (max posterior)
+            
+            counter=counter+1;
+        end
+        
+    end
+    
+    %=== Shuffled data, Cut at random points
+    for jjj=1:n_swp_shuffles
+        single_SWP_sh = table();   counter_sh=1;
+        for zz=1:N_flights
+            
+            %=== Find wingbeat minima
+            zero_phs_idx = find(SWPs_sst.tmr_phase{zz,1}(1:end-1).* SWPs_sst.tmr_phase{zz,1}(2:end)<0 & diff(SWPs_sst.tmr_phase{zz,1})>0); % Segment based on Tamir's phase
+            sweep_strt = zero_phs_idx(1:end-1); sweep_stop = zero_phs_idx(2:end);
+            N_spatial_bins = size(SWPs_sst.p_dec_flight{zz,1},1);
+            spt_bin_ids = [1:N_spatial_bins]';
+            
+            %=== Shuffling procedure
+            rand_shift =  -round(max_int_shift/2)+randi(max_int_shift,numel(sweep_strt),1);
+            sweep_strt_sh = sweep_strt+rand_shift; sweep_stop_sh = sweep_stop+rand_shift;
+            sweep_strt = sweep_strt_sh(sweep_strt_sh>1 & sweep_stop_sh<size(SWPs_sst.wbt_phase{zz,1},1));
+            sweep_stop = sweep_stop_sh(sweep_strt_sh>1 & sweep_stop_sh<size(SWPs_sst.wbt_phase{zz,1},1));
+            
+            %=== Shuffle data
+            for ss=1:numel(sweep_strt)
+                
+                swp_interval = sweep_strt(ss):sweep_stop(ss);
+                
+                %=== Basic features of the sweep
+                single_SWP_sh.flight_ID(counter) = zz;
+                single_SWP_sh.rms_dec(counter) = SWPs_sst.rmsDec_error(zz);
+                single_SWP_sh.prc_dec(counter) = SWPs_sst.prc_decoded(zz);
+                
+                %=== Raw, filtered, shifted and rehaped posterior
+                single_SWP_sh.raw_posterior(counter) = {SWPs_sst.p_dec_flight{zz,1}(:,swp_interval)};
+                %single_SWP_sh.sft_posterior(counter_sh) = {imgaussfilt(SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval),smooth_f)};
+                single_SWP_sh.sft_posterior(counter) = {SWPs_sst.p_dec_shifted{zz,1}(:,swp_interval)};
+                single_SWP_sh.rsp_posterior(counter) = {imresize(single_SWP_sh.sft_posterior{counter,1},[size(single_SWP_sh.sft_posterior{counter,1},1),n_reshape])};
+                
+                %=== Spike density, wingbeat, LFP, Tamir's phase echolocation and phase
+                single_SWP_sh.rsz_spk_dsty(counter) = {interp1(SWPs_sst.spk_dsty{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.spk_dsty{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.wbt_power(counter) = {SWPs_sst.wbt_power{zz,1}(swp_interval)};
+                single_SWP_sh.rsz_LFP(counter) = {interp1(SWPs_sst.LFP{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.LFP{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.rsz_wbt(counter) = {interp1(SWPs_sst.wbt{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.fract_pos(counter) = {SWPs_sst.pos_real{zz,1}(swp_interval)/SWPs_sst.pos_real{zz,1}(end)};
+                single_SWP_sh.rsz_clk(counter) = {interp1(SWPs_sst.clk{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.clk{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.rsz_wbt_phase(counter) = {interp1(SWPs_sst.wbt_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.wbt_phase{zz,1}(swp_interval)),n_reshape)')};
+                single_SWP_sh.rsz_tmr_phase(counter) = {interp1(SWPs_sst.tmr_phase{zz,1}(swp_interval),linspace(1,numel(SWPs_sst.tmr_phase{zz,1}(swp_interval)),n_reshape)')};
+                
+                %=== Add some features of the single cycle
+                single_SWP_sh.mean_spk_dsty(counter) = mean(single_SWP_sh.rsz_spk_dsty{counter,1});     % Average spike density
+                single_SWP_sh.mean_fract_pos(counter) = mean(single_SWP_sh.fract_pos{counter,1});       % Average phase of the flight
+                single_SWP_sh.mean_tmr_power(counter) = mean(SWPs_sst.tmr_power{zz,1}(swp_interval));   % Average Tamir's power
+
+                
+                %=== Add some features of the posterior
+                [max_p,max_loc] = max(single_SWP_sh.rsp_posterior{counter,1},[],1);        % Location of max posterior
+                cnt_mass = spt_bin_ids'*single_SWP_sh.rsp_posterior{counter,1};            % Center of mass
+                single_SWP_sh.med_jmp_distance(counter) = median(abs(diff(cnt_mass)));     % Median jump distance with center of mass
+                single_SWP_sh.mean_jmp_distance(counter) = mean(abs(diff(max_loc)));       % Mean jump distance with loc of max posterior
+                single_SWP_sh.med_max_post(counter) = mean(max_p);                         % Average max posterior
+                single_SWP_sh.est_dist1(counter) = {(cnt_mass-N_spatial_bins/2)*bin_size_1D};  % Decoding error, reshaped and in m (center of mass)
+                single_SWP_sh.est_dist2(counter) = {(max_loc-N_spatial_bins/2)*bin_size_1D};   % Decoding error, reshaped and in m (max posterior)
+                
+                counter=counter+1;
+            end
+        end
+        single_SWP_sh_cell = [single_SWP_sh_cell;{single_SWP_sh}];
+    end
+    warning('on');
+    
+    %%
+    %=== Extract subset using defined criteria (exclude flight tails, epochs of low firing and flat sweeps)
+    min_pos1 = 0.15;
+    min_pos2 = 0.85;
+    min_rms = 1.3;
+    min_prc = 0.7;
+    min_mjp = 0.0;
+    min_mp = 0.0;
+    min_tmr_prc = 25;
+    
+    SWP_sst_rl = single_SWP_rl(single_SWP_rl.mean_fract_pos>min_pos1 & single_SWP_rl.mean_fract_pos<min_pos2 & single_SWP_rl.rms_dec<min_rms &...
+                               single_SWP_rl.prc_dec>min_prc & single_SWP_rl.mean_jmp_distance>min_mjp & single_SWP_rl.med_max_post>min_mp & single_SWP_rl.mean_tmr_power>prctile(single_SWP_rl.mean_tmr_power,min_tmr_prc),:);
+    N_sweeps_rl = size(SWP_sst_rl,1);
+    
+    %=== Calculate averages and STDs (REAL DATA)
+    est_dist_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_spk_dsty_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_wbt_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_LFP_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_clk_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_wbt_phase_rl = zeros(n_reshape,N_sweeps_rl);
+    rsz_tmr_phase_rl = zeros(n_reshape,N_sweeps_rl);
+    for i=1:N_sweeps_rl
+        est_dist_rl(:,i) = SWP_sst_rl.est_dist1{i,1};
+        rsz_spk_dsty_rl(:,i) = SWP_sst_rl.rsz_spk_dsty{i,1};
+        rsz_wbt_rl(:,i) = SWP_sst_rl.rsz_wbt{i,1};
+        rsz_LFP_rl(:,i) = SWP_sst_rl.rsz_LFP{i,1};
+        rsz_clk_rl(:,i) = SWP_sst_rl.rsz_clk{i,1};
+        rsz_wbt_phase_rl(:,i) = SWP_sst_rl.rsz_wbt_phase{i,1};
+        rsz_tmr_phase_rl(:,i) = SWP_sst_rl.rsz_tmr_phase{i,1};
+    end
+    avg_est_dist_rl = mean(est_dist_rl,2);            sem_est_dist_rl = std(est_dist_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_spk_dsty_rl = mean(rsz_spk_dsty_rl,2);    sem_rsz_spk_dsty_rl = std(rsz_spk_dsty_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_wbt_rl = mean(rsz_wbt_rl,2);              sem_rsz_wbt_rl = std(rsz_wbt_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_LFP_rl = mean(rsz_LFP_rl,2);              sem_rsz_LFP_rl = std(rsz_LFP_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_wbt_phase_rl = mean(rsz_wbt_phase_rl,2);  sem_rsz_wbt_phase_rl = std(rsz_wbt_phase_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_tmr_phase_rl = mean(rsz_tmr_phase_rl,2);  sem_rsz_tmr_phase_rl = std(rsz_tmr_phase_rl,[],2)/sqrt(N_sweeps_rl);
+    avg_rsz_clk_rl = mean(rsz_clk_rl,2);              sem_rsz_clk_rl = std(rsz_clk_rl,[],2)/sqrt(N_sweeps_rl);
+    
+    %=== Calculate averages and STDs (SHUFFLED DATA)
+    avg_est_dist_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_spk_dsty_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_wbt_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_LFP_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_wbt_phase_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_tmr_phase_sh_all = zeros(n_reshape,n_swp_shuffles);
+    avg_rsz_clk_sh_all = zeros(n_reshape,n_swp_shuffles);
+    for jjj=1:n_swp_shuffles
+        
+        single_SWP_sh = single_SWP_sh_cell{jjj};
+        SWP_sst_sh = single_SWP_sh(single_SWP_sh.mean_fract_pos>min_pos1 & single_SWP_sh.mean_fract_pos<min_pos2 & single_SWP_sh.rms_dec<min_rms &...
+                                   single_SWP_sh.prc_dec>min_prc & single_SWP_sh.mean_jmp_distance>min_mjp & single_SWP_sh.med_max_post>min_mp & single_SWP_sh.mean_tmr_power>prctile(single_SWP_sh.mean_tmr_power,min_tmr_prc),:);
+        N_sweeps_sh = size(SWP_sst_sh,1);
+       
+        est_dist_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_spk_dsty_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_wbt_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_LFP_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_clk_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_wbt_phase_sh = zeros(n_reshape,N_sweeps_sh);
+        rsz_tmr_phase_sh = zeros(n_reshape,N_sweeps_sh);
+        for i=1:N_sweeps_sh
+            est_dist_sh(:,i) = SWP_sst_sh.est_dist1{i,1};
+            rsz_spk_dsty_sh(:,i) = SWP_sst_sh.rsz_spk_dsty{i,1};
+            rsz_wbt_sh(:,i) = SWP_sst_sh.rsz_wbt{i,1};
+            rsz_LFP_sh(:,i) = SWP_sst_sh.rsz_LFP{i,1};
+            rsz_clk_sh(:,i) = SWP_sst_sh.rsz_clk{i,1};
+            rsz_wbt_phase_sh(:,i) = SWP_sst_sh.rsz_wbt_phase{i,1};
+            rsz_tmr_phase_sh(:,i) = SWP_sst_sh.rsz_tmr_phase{i,1};
+        end
+        avg_est_dist_sh_all(:,jjj) = mean(est_dist_sh,2);            
+        avg_rsz_spk_dsty_sh_all(:,jjj) = mean(rsz_spk_dsty_sh,2);    
+        avg_rsz_wbt_sh_all(:,jjj) = mean(rsz_wbt_sh,2);              
+        avg_rsz_LFP_sh_all(:,jjj) = mean(rsz_LFP_sh,2);              
+        avg_rsz_wbt_phase_sh_all(:,jjj) = mean(rsz_wbt_phase_sh,2);
+        avg_rsz_tmr_phase_sh_all(:,jjj) = mean(rsz_tmr_phase_sh,2);
+        avg_rsz_clk_sh_all(:,jjj) = mean(rsz_clk_sh,2);              
+    end
+    
+    %=== Average shuffles
+    avg_est_dist_sh = mean(avg_est_dist_sh_all,2);            sem_est_dist_sh = std(avg_est_dist_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_spk_dsty_sh = mean(avg_rsz_spk_dsty_sh_all,2);    sem_rsz_spk_dsty_sh = std(avg_rsz_spk_dsty_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_wbt_sh = mean(avg_rsz_wbt_sh_all,2);              sem_rsz_wbt_sh = std(avg_rsz_wbt_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_LFP_sh = mean(avg_rsz_LFP_sh_all,2);              sem_rsz_LFP_sh = std(avg_rsz_LFP_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_wbt_phase_sh = mean(avg_rsz_wbt_phase_sh_all,2);  sem_rsz_wbt_phase_sh = std(avg_rsz_wbt_phase_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_tmr_phase_sh = mean(avg_rsz_tmr_phase_sh_all,2);  sem_rsz_tmr_phase_sh = std(avg_rsz_tmr_phase_sh_all,[],2)/sqrt(n_swp_shuffles);
+    avg_rsz_clk_sh = mean(avg_rsz_clk_sh_all,2);              sem_rsz_clk_sh = std(avg_rsz_clk_sh_all,[],2)/sqrt(n_swp_shuffles);
+    
+    %=== Define bins and find peak decoding error phase
+    rsz_bin_ctrs = linspace(-180,180,n_reshape);
+    [max_val,max_loc] = max(avg_est_dist_rl);                rsz_bin_ctrs(max_loc);
+    sum(abs(diff(SWP_sst_rl.flight_ID)))+1;
+    
+    %=== Calculate significance trace
+    pVal_est_dist = sum(avg_est_dist_rl<avg_est_dist_sh_all,2)./n_swp_shuffles;
+    
+    %=== Show averages
+    figure('units','normalized','outerposition',[.3 .3 .5 .3]);
+    tiledlayout(1,7,'TileSpacing','compact');
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_est_dist_sh,avg_est_dist_sh-sem_est_dist_sh,avg_est_dist_sh+sem_est_dist_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_est_dist_rl,avg_est_dist_rl-sem_est_dist_rl,avg_est_dist_rl+sem_est_dist_rl,[.9 .5 .2]);
+    plot(rsz_bin_ctrs(pVal_est_dist<0.05),max(avg_est_dist_rl)*ones(size(rsz_bin_ctrs(pVal_est_dist<0.05))),'*');
+    xticks([-170 0 170]);    title('Average Decoding Error');    plot(0*[1 1],ylim,'k--'); xlim('tight');   xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_spk_dsty_sh,avg_rsz_spk_dsty_sh-sem_rsz_spk_dsty_sh,avg_rsz_spk_dsty_sh+sem_rsz_spk_dsty_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_spk_dsty_rl,avg_rsz_spk_dsty_rl-sem_rsz_spk_dsty_rl,avg_rsz_spk_dsty_rl+sem_rsz_spk_dsty_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Average Spike Density');    plot(0*[1 1],ylim,'k--'); xlim('tight');    xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_LFP_sh,avg_rsz_LFP_sh-sem_rsz_LFP_sh,avg_rsz_LFP_sh+sem_rsz_LFP_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_LFP_rl,avg_rsz_LFP_rl-sem_rsz_LFP_rl,avg_rsz_LFP_rl+sem_rsz_LFP_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Average LFP');    plot(0*[1 1],ylim,'k--'); xlim('tight');              xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_clk_sh,avg_rsz_clk_sh-sem_rsz_clk_sh,avg_rsz_clk_sh+sem_rsz_clk_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_clk_rl,avg_rsz_clk_rl-sem_rsz_clk_rl,avg_rsz_clk_rl+sem_rsz_clk_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Average Call Rate');    plot(0*[1 1],ylim,'k--'); xlim('tight');        xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_phase_sh,avg_rsz_wbt_phase_sh-sem_rsz_wbt_phase_sh,avg_rsz_wbt_phase_sh+sem_rsz_wbt_phase_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_phase_rl,avg_rsz_wbt_phase_rl-sem_rsz_wbt_phase_rl,avg_rsz_wbt_phase_rl+sem_rsz_wbt_phase_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Wingbeat Phase');    plot(0*[1 1],ylim,'k--'); xlim('tight');           xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_sh,avg_rsz_wbt_sh-sem_rsz_wbt_sh,avg_rsz_wbt_sh+sem_rsz_wbt_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_wbt_rl,avg_rsz_wbt_rl-sem_rsz_wbt_rl,avg_rsz_wbt_rl+sem_rsz_wbt_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Accelerometer');    plot(0*[1 1],ylim,'k--'); xlim('tight');           xlim([-170; 170]);
+    nexttile;   hold on;
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_tmr_phase_sh,avg_rsz_tmr_phase_sh-sem_rsz_tmr_phase_sh,avg_rsz_tmr_phase_sh+sem_rsz_tmr_phase_sh,'k');
+    plotWinterval_AF_v0(rsz_bin_ctrs,avg_rsz_tmr_phase_rl,avg_rsz_tmr_phase_rl-sem_rsz_tmr_phase_rl,avg_rsz_tmr_phase_rl+sem_rsz_tmr_phase_rl,[.9 .5 .2]);
+    xticks([-170 0 170]);    title('Tamir s Phase');    plot(0*[1 1],ylim,'k--'); xlim('tight');           xlim([-170; 170]);
+    sgtitle(['Average of ',num2str(N_sweeps_rl),' cycles, from ',num2str(numel(unique(SWP_sst_rl.flight_ID))),' flights']);
+    
+end
+
+%% THETA SWEEPS ANALAYSIS (TEMPLATE MATCHING)
+for hide=1
+    
+    %=== Select subtable of good flights
+    rng(1);
+    SWPs_sst = SWPs(SWPs.rmsDec_error<1.3 & SWPs.prc_decoded>0.7,:);
+    [~,~,SWPs_sst.groupID] =  unique([string(SWPs_sst.unique_ID),string(SWPs_sst.flight_id)],'rows');                                  % Id for each cluster from each session
+    [~,~,SWPs_sst.sessionID] =  unique([string(SWPs_sst.unique_ID)],'rows');                                                           % Id for each cluster from each session
+    N_flights = size(SWPs_sst,1);
+    smooth_f = [1 .3];                                                  % [space bin,time bin]
+    n_bins_phase = 11;
+    
+    %=== Create template for finding candidate theta sweeps via template matching
+    template_samples = 12;      %12
+    sweep_binspan = 6;          %6
+    conv_threshold = 2;         %2
+    template = normalize(interp1(normpdf(-3:0.1:3),linspace(1,61,template_samples)),'range')*bin_size_1D*sweep_binspan;
+    %plot(template)
+    
+    %=== Init vectors
+    SWPs_posterior = [];  SWPs_wbtphase = [];   SWPs_tmrphase = [];  SWPs_amp = [];   SWPs_wbtphase_ctrl = [];    SWPs_f_id = []; SWPs_s_id = [];
+    wbt_phase_all = []; tmr_phase_all = []; tmr_power_all = []; fract_pos_all = [];
+    
+    %=== Find theta sweeps by template matching
+    warning('off');
+    for zz=1:N_flights
+        
+        %=== Number of spatial bins
+        N_spatial_bins = size(SWPs_sst.p_dec_flight{zz,1},1);
+        spt_bin_ids = [1:N_spatial_bins]';
+        
+        %=== Shifted posterior and wingbeat phase
+        sft_posterior = imgaussfilt(SWPs_sst.p_dec_shifted{zz,1},smooth_f);
+        wbt_phase = SWPs_sst.wbt_phase{zz,1};
+        tmr_phase = SWPs_sst.tmr_phase{zz,1};
+        fract_pos = SWPs_sst.pos_real{zz,1}/SWPs_sst.pos_real{zz,1}(end);
+        
+        wbt_phase_all = [wbt_phase_all; wbt_phase];
+        tmr_phase_all = [tmr_phase_all; tmr_phase];
+        fract_pos_all = [fract_pos_all; fract_pos];
+        tmr_power_all = [tmr_power_all; SWPs_sst.tmr_power{zz,1};];
+        
+        %=== Extract the center of mass and convolve with template
+        %cnt_mass = (spt_bin_ids'*imgaussfilt(SWPs_sst.p_dec_shifted{zz,1},smooth_f)-N_spatial_bins/2)*bin_size_1D;
+        [~,max_loc] = max(imgaussfilt(SWPs_sst.p_dec_shifted{zz,1},smooth_f),[],1);
+        cnt_mass = (max_loc-N_spatial_bins/2)*bin_size_1D;
+        %sample_trace = cnt_mass;
+        sample_trace = detrend(cnt_mass,15,'omitnan');
+        convolutionResult = conv(sample_trace, flip(template), 'same');
+        
+        %         figure('units','normalized','outerposition',[.3 .3 .2 .3]);
+        %         plot(sample_trace); hold on; plot(normalize(convolutionResult));
+        
+        %=== Find candidate sweeps
+        [candidate_swp_amp,candidate_swp] = findpeaks(convolutionResult,'MinPeakDistance',template_samples,'MinPeakHeight',conv_threshold);
+        
+        %=== For every sweep, store the posterior probability and the wingbeat phase
+        for ss=1:numel(candidate_swp)
+            if candidate_swp(ss)-template_samples>0 && candidate_swp(ss)+template_samples< size(sft_posterior,2) && round(N_spatial_bins/2)-1*sweep_binspan>0 && round(N_spatial_bins/2)+3*sweep_binspan<N_spatial_bins
+                tmp_pst = sft_posterior(round(N_spatial_bins/2)+[-1*sweep_binspan:2*sweep_binspan],candidate_swp(ss)+[-template_samples:template_samples]);
+                tmp_pst(isnan(tmp_pst))=0;
+                SWPs_posterior = cat(3,SWPs_posterior,tmp_pst);
+                SWPs_wbtphase = [SWPs_wbtphase; wbt_phase(candidate_swp(ss))];
+                SWPs_tmrphase = [SWPs_tmrphase; tmr_phase(candidate_swp(ss))];
+                
+                %=== Control random phase
+                available_samples = find(fract_pos>0.0 & fract_pos<1);
+                SWPs_wbtphase_ctrl = [SWPs_wbtphase_ctrl; wbt_phase(available_samples(randi(numel(available_samples),1,100)))];
+                SWPs_amp = [SWPs_amp; candidate_swp_amp(ss)];
+                SWPs_f_id = [SWPs_f_id; SWPs_sst.groupID];
+                SWPs_s_id = [SWPs_s_id; SWPs_sst.sessionID];
+            end
+        end
+        %SWPs_sst.pos_real{zz,1}/SWPs_sst.pos_real{zz,1}(end);
+        
+    end
+    warning('on');
+    
+    %=== Look at phase relationships between Tamir's and Wingbeat
+    wbt_phase_good = wbt_phase_all(tmr_power_all>prctile(tmr_power_all,25) & fract_pos_all>0.15 & fract_pos_all<0.85);
+    tmr_phase_good = tmr_phase_all(tmr_power_all>prctile(tmr_power_all,25) & fract_pos_all>0.15 & fract_pos_all<0.85);
+    phase_bins_tmp = linspace(-pi,pi,n_bins_phase);
+    phase_ctrs_tmp = phase_bins_tmp(1:end-1)+mean(diff(phase_bins_tmp))/2;
+    phaseDiff = smoothdata(histcounts(wrapToPi(wbt_phase_good-tmr_phase_good),phase_bins_tmp,'Normalization','probability'),'movmean',3);
+     
+    figure('units','normalized','outerposition',[.3 .3 .15 .3]);
+    phase2plot = repmat(phaseDiff,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar(phase_ctrs_tmp,phaseDiff,1,'FaceColor',[0,0,0],'edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Phase Difference (Wingbeat - Nonoscillatory)');
+    
+    %=== Train the network or load the pretrained network if needed
+    if ~isfile('trainedNet.mat')
+        theta_sweep_manual_class_AF_v0
+    else
+        load('trainedNet.mat');
+        load('man_class_SWSs.mat');
+    end
+    
+    %=== Prepare the images for prediction
+    numImages = size(SWPs_posterior, 3); % Number of images
+    inputSize = [227, 227, 3];           % AlexNet input size
+    test_data_sst = SWPs_posterior;      % Copy data
+    
+    %=== Resize images for AlexNet
+    SWPs_resized = zeros([inputSize, numImages], 'single');
+    for i = 1:numImages
+        test_data_sst(:, :, i) = SWPs_posterior(:, :, i)./max(SWPs_posterior(:, :, i),[],'all');
+        SWPs_resized(:, :, :, i) = imresize(repmat(test_data_sst(:, :, i), [1, 1, 3]), inputSize(1:2));
+    end
+    
+    %=== Predict the labels using the trained network
+    testDs = augmentedImageDatastore(inputSize, SWPs_resized);
+    predictedLabels = classify(trainedNet, testDs);
+    good_ids = find(predictedLabels == '1');  N_good = numel(good_ids);
+    baad_ids = find(predictedLabels == '0');  N_baad = numel(baad_ids);
+    
+    %     %=== Show some examples
+    %     rng(3)
+    %     figure('units','normalized','outerposition',[0.1 0.2 .4 0.5]);
+    %     tiledlayout(10,20,'TileSpacing','tight');
+    %     for i=1:min(N_good,200)
+    %         tmp_pst = squeeze(SWPs_posterior(:,:,good_ids(randi(N_good))));
+    %         nexttile;   imagesc(tmp_pst,prctile(tmp_pst, [1 99],'all')');
+    %         colormap(flipud(gray)); axis off;  set(gca,'YDir','normal');
+    %     end
+    %
+    %     sgtitle('Good Sweeps');
+    %     figure('units','normalized','outerposition',[.5 0 .5 1]);
+    %     tiledlayout(5,10,'TileSpacing','compact');
+    %     for i=1:min(N_baad,50)
+    %         tmp_pst = squeeze(SWPs_posterior(:,:,baad_ids(randi(N_baad))));
+    %         nexttile;   imagesc(tmp_pst,prctile(tmp_pst, [1 99],'all')');
+    %         colormap(flipud(gray)); axis off;  set(gca,'YDir','normal');
+    %     end
+    %     sgtitle('Bad Sweeps');
+    
+    %====================================================================================================================================================
+    
+    %% OLD
+    %=== Calculate average sweep posterior and phase distribution
+    cond = good_ids;
+    bin_smoothing = 4;
+    phase_bins_tmp = linspace(-pi,pi,n_bins_phase);
+    phase_ctrs_tmp = phase_bins_tmp(1:end-1)+mean(diff(phase_bins_tmp))/2;
+    phase2wbt_tmp = smoothdata(histcounts(SWPs_wbtphase(cond),phase_bins_tmp,'Normalization','probability'),'movmean',bin_smoothing);
+    phase2wbt_ctr = smoothdata(histcounts(SWPs_wbtphase_ctrl,phase_bins_tmp,'Normalization','probability'),'movmean',bin_smoothing);
+    phase2wbt_cor = phase2wbt_tmp-phase2wbt_ctr;
+    
+    numel(unique(SWPs_s_id(cond)))
+    
+    %=== Fit values
+    x = [phase_ctrs_tmp,phase_ctrs_tmp+2*pi];
+    y = repmat(phase2wbt_cor,1,2);
+    x1 = x(~isnan(y));  y1 = y(~isnan(y));
+    y1 = normalize(y1-mean(y1),'range',[-1 1]);
+    [f1,gof1] = fit(x1',y1',cosEqn,'Start',[1 0],'Lower',[-inf 0]);
+    fit_coeff = coeffvalues(f1);
+    fit_coeff_int = confint(f1);
+    
+    %=== Plot data
+    figure('units','normalized','outerposition',[.3 .3 .5 .3]);
+    tiledlayout(1,5,'TileSpacing','compact');
+    nexttile;   imagesc(mean(SWPs_posterior(:,:, cond),3,'omitnan'),prctile(mean(SWPs_posterior(:,:, cond),3,'omitnan'),[1 99],'all')');    %hold on; plot(SWP_sst.max_loc{i,1});
+    colormap(flipud(gray));
+    axis off;  set(gca,'YDir','normal');
+    nexttile;   polarhistogram(SWPs_wbtphase( cond),linspace(-pi,pi,18),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');
+    phase2plot = repmat(phase2wbt_tmp,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'k','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Real');
+    phase2plot = repmat(phase2wbt_ctr,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(2) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'b','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title('Random');
+    phase2plot = repmat(phase2wbt_cor,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'k','edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');    title('Corrected');
+    linkaxes(ax,'y');
+    
+    %=== Plot fit
+    figure;
+    plot(f1);    hold on;  bar(x1,y1,1,'EdgeColor','none','FaceColor','k'); legend('off');
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});
+    title(['Max at: ', num2str(rad2deg(fit_coeff(2)),3), '( ', num2str( rad2deg(fit_coeff_int(2,1)),3),'-',num2str( rad2deg(fit_coeff_int(2,2)),3),')'])
+    numel(cond)
+    
+    %% NEW === Quantify phase distribution on the set of manually labeled images 
+    
+    use_classifier = 0;
+    
+    %=== Extract phases of the manually labeled sweeps
+    wbt_ML = SWPs_wbtphase(image_idx);  % wingbeat phase of the Manually Labeled sweeps
+    tmr_ML = SWPs_tmrphase(image_idx);  % Tamir' s phase of the Manually Labeled sweeps
+    wbt_gd_ML = wbt_ML(image_label);    wbt_bd_ML = wbt_ML(~image_label);   % wingbeat phase of good and bad ML sweeps
+    tmr_gd_ML = tmr_ML(image_label);    tmr_bd_ML = tmr_ML(~image_label);   % Tamir' s phase of good and bad ML sweeps
+    SWPs_gd_posterior = SWPs_posterior(:,:, image_idx(image_label));
+    SWPs_bd_posterior = SWPs_posterior(:,:, image_idx(~image_label));
+    
+    SWPs_gd_amplitude = SWPs_amp(image_idx(image_label));
+    SWPs_bd_amplitude = SWPs_amp(image_idx(~image_label));
+
+    if use_classifier
+    wbt_gd_ML = SWPs_wbtphase(good_ids);    wbt_bd_ML = SWPs_wbtphase(baad_ids);
+    tmr_gd_ML = SWPs_tmrphase(good_ids);    tmr_bd_ML = SWPs_tmrphase(baad_ids);
+    SWPs_gd_posterior = SWPs_posterior(:,:, good_ids);
+    SWPs_bd_posterior = SWPs_posterior(:,:, baad_ids);
+    SWPs_gd_amplitude = SWPs_amp(good_ids);
+    SWPs_bd_amplitude = SWPs_amp(baad_ids);
+    end
+    
+    %=== Histograms
+    bin_smoothing = 4;
+    phase_bins_tmp = linspace(-pi,pi,n_bins_phase);
+    phase_ctrs_tmp = phase_bins_tmp(1:end-1)+mean(diff(phase_bins_tmp))/2;
+    if bin_smoothing
+        phase2wbt_gd_ML = smoothdata(histcounts(wbt_gd_ML,phase_bins_tmp,'Normalization','probability'),'movmean',bin_smoothing);
+        phase2wbt_bd_ML = smoothdata(histcounts(wbt_bd_ML,phase_bins_tmp,'Normalization','probability'),'movmean',bin_smoothing);
+        phase2tmr_gd_ML = smoothdata(histcounts(tmr_gd_ML,phase_bins_tmp,'Normalization','probability'),'movmean',bin_smoothing);
+        phase2tmr_bd_ML = smoothdata(histcounts(tmr_bd_ML,phase_bins_tmp,'Normalization','probability'),'movmean',bin_smoothing);
+    else
+        phase2wbt_gd_ML = histcounts(wbt_gd_ML,phase_bins_tmp,'Normalization','probability');
+        phase2wbt_bd_ML = histcounts(wbt_bd_ML,phase_bins_tmp,'Normalization','probability');
+        phase2tmr_gd_ML = histcounts(tmr_gd_ML,phase_bins_tmp,'Normalization','probability');
+        phase2tmr_bd_ML = histcounts(tmr_bd_ML,phase_bins_tmp,'Normalization','probability');
+    end
+        
+    %=== Plot
+    figure('units','normalized','outerposition',[.3 .1 .2 .6]);
+    tiledlayout(3,3,'TileSpacing','compact');
+    nexttile;   imagesc(mean(SWPs_gd_posterior,3,'omitnan'),prctile(mean(SWPs_gd_posterior,3,'omitnan'),[1 99],'all')');    
+    colormap(flipud(gray)); axis off;  set(gca,'YDir','normal');    
+    nexttile;   imagesc(mean(SWPs_bd_posterior,3,'omitnan'),prctile(mean(SWPs_bd_posterior,3,'omitnan'),[1 99],'all')');    
+    colormap(flipud(gray)); axis off;  set(gca,'YDir','normal');    
+    nexttile; axis off;
+    phase2plot = repmat(phase2wbt_gd_ML,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'FaceColor',[1,0.53,0],'edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title(['Good Sweeps, n= ',num2str(numel(wbt_gd_ML))]);  
+    phase2plot = repmat(phase2wbt_bd_ML,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'FaceColor',[.5 .5 .5],'edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');  title(['Bad Sweeps, n = ',num2str(numel(wbt_bd_ML))]);  
+    phase2plot = repmat(phase2wbt_gd_ML-phase2wbt_bd_ML,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'FaceColor',[1,0.53,0],'edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');   title('Difference');
+    phase2plot = repmat(phase2tmr_gd_ML,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'FaceColor',[0 1 1],'edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Non-oscillatory');  
+    phase2plot = repmat(phase2tmr_bd_ML,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'FaceColor',[.5 .5 .5],'edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Non-oscillatory'); 
+    phase2plot = repmat(phase2tmr_gd_ML-phase2tmr_bd_ML,1,2); delta_h = (max(phase2plot)-mean(phase2plot));
+    ax(1) = nexttile;   bar([phase_ctrs_tmp,phase_ctrs_tmp+2*pi],phase2plot,1,'FaceColor',[0 1 1],'edgecolor','none');  ylim(mean(phase2plot)+delta_h*[-2 2]);
+    xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Non-oscillatory');
+    
+    figure('units','normalized','outerposition',[.3 .1 .15 .3]);
+    plot_distr_AF_v0(SWPs_gd_amplitude, SWPs_bd_amplitude, {'Good', 'Bad'}, 'SEM', 'Amplitude'); ylim_vals = ylim;   ylim([0 ylim_vals(2)]);
+    
+end
+
+%% ECHOLOCATION ANALYSIS
+for hide=1
+    
+    %=== Look at echolocation phase
+    N_flights = size(SWPs,1);
+    click_phase = [];
+    for zz=1:N_flights
+        cond = [SWPs.pos_real{zz,1}/SWPs.pos_real{zz,1}(end)>0.15 & SWPs.pos_real{zz,1}/SWPs.pos_real{zz,1}(end)<0.85 & SWPs.clk{zz,1}];
+        click_phase  = [click_phase; SWPs.wbt_phase{zz,1}(cond)];
+    end
+    
+    %=== Plot phase
+    figure('units','normalized','outerposition',[.3 .3 .2 .25]);
+    tiledlayout(1,2,'TileSpacing','compact');
+    nexttile;   polarhistogram(click_phase,linspace(-pi,pi,90),'Normalization','probability','facealpha',.9,'edgecolor','none','FaceColor','k');
+    nexttile;   histogram([click_phase;click_phase+2*pi],unique([linspace(-pi,pi,40),linspace(pi,3*pi,40)]),'Normalization','probability','facealpha',.5,'edgecolor','none','FaceColor','k');
+    yticks([]); xticks(-pi:pi:3*pi);    xticklabels({'-180', '0', '180', '360', '540'});   xlabel('Wingbeat');
+    
+    %=== Select subtable of good flights for theta sweeps + echolocation
+    SWPs_sst = SWPs(SWPs.rmsDec_error<2 & cellfun(@any,SWPs.clk) & SWPs.prc_decoded>0.5,:);
+    
+    %=== Params and initialize relevant variables
+    n_reshape = 50;                 % Default 30
+    smooth_f = [1 .3];              % [space bin,time bin]
+    N_flights = size(SWPs_sst,1);
+    
+    single_SWP = table();
+    counter=1;
+    warning('off');
+    %=== Cut at wingbeat maxima
+    for zz=1:N_flights
+        
+        zero_phs_idx = find(SWPs_sst.wbt_phase{zz,1}(1:end-1).* SWPs_sst.wbt_phase{zz,1}(2:end)<0 & diff(SWPs_sst.wbt_phase{zz,1})<0);  % Segment based on wingbeat
+        %zero_phs_idx = find(SWPs_sst.tmr_phase{zz,1}(1:end-1).* SWPs_sst.tmr_phase{zz,1}(2:end)<0 & diff(SWPs_sst.tmr_phase{zz,1})>0); % Segment based on Tamir's phase
+        %plot(SWPs_sst.wbt_phase{zz,1});   hold on; stem(zero_phs_idx, ones(size(zero_phs_idx )));  plot(SWPs_sst.wbt{zz,1});
+        sweep_strt = zero_phs_idx(1:end-1); sweep_stop = zero_phs_idx(2:end);
+        N_spatial_bins = size(SWPs_sst.p_dec_flight{zz,1},1);
+        spt_bin_ids = [1:N_spatial_bins]';
+        
+        for ss=1:numel(sweep_strt)
+            
+            single_SWP.flight_ID(counter) = zz;
+            single_SWP.rms_dec(counter) = SWPs_sst.rmsDec_error(zz);
+            single_SWP.prc_dec(counter) = SWPs_sst.prc_decoded(zz);
+            single_SWP.reg_posterior(counter) = {imgaussfilt(SWPs_sst.p_dec_flight{zz,1}(:,sweep_strt(ss):sweep_stop(ss)),smooth_f)};
+            single_SWP.sft_posterior(counter) = {imgaussfilt(SWPs_sst.p_dec_shifted{zz,1}(:,sweep_strt(ss):sweep_stop(ss)),smooth_f)};
+            single_SWP.rsp_posterior(counter) = {imresize(single_SWP.sft_posterior{counter,1},[size(single_SWP.sft_posterior{counter,1},1),n_reshape])};
+            
+            single_SWP.spk_dsty(counter) = {SWPs_sst.spk_dsty{zz,1}(sweep_strt(ss):sweep_stop(ss))};
+            single_SWP.rsz_spk_dsty(counter) = {interp1(single_SWP.spk_dsty{counter,1},linspace(1,numel(single_SWP.spk_dsty{counter,1}),n_reshape)')};
+            single_SWP.wbt_power(counter) = {SWPs_sst.wbt_power{zz,1}(sweep_strt(ss):sweep_stop(ss))};
+            single_SWP.LFP(counter) = {SWPs_sst.LFP{zz,1}(sweep_strt(ss):sweep_stop(ss))};
+            single_SWP.rsz_LFP(counter) = {interp1(single_SWP.LFP{counter,1},linspace(1,numel(single_SWP.LFP{counter,1}),n_reshape)')};
+            single_SWP.wbt(counter) = {SWPs_sst.wbt{zz,1}(sweep_strt(ss):sweep_stop(ss))};
+            single_SWP.rsz_wbt(counter) = {interp1(single_SWP.wbt{counter,1},linspace(1,numel(single_SWP.wbt{counter,1}),n_reshape)')};
+            single_SWP.fract_pos(counter) = {SWPs_sst.pos_real{zz,1}(sweep_strt(ss):sweep_stop(ss))/SWPs_sst.pos_real{zz,1}(end)};
+            
+            single_SWP.clk(counter) = {SWPs_sst.clk{zz,1}(sweep_strt(ss):sweep_stop(ss))};
+            single_SWP.rsz_clk(counter) = {interp1(single_SWP.clk{counter,1},linspace(1,numel(single_SWP.clk{counter,1}),n_reshape)')};
+            
+            single_SWP.wbt_phase(counter) = {SWPs_sst.wbt_phase{zz,1}(sweep_strt(ss):sweep_stop(ss))};
+            single_SWP.rsz_wbt_phase(counter) = {interp1(single_SWP.wbt_phase{counter,1},linspace(1,numel(single_SWP.wbt_phase{counter,1}),n_reshape)')};
+            
+            single_SWP.mean_spk_dsty(counter) = mean(single_SWP.spk_dsty{counter,1});
+            single_SWP.mean_wbt_power(counter) = mean(single_SWP.wbt_power{counter,1});
+            single_SWP.mean_fract_pos(counter) = mean(single_SWP.fract_pos{counter,1});
+            
+            [max_p,max_loc] = max(single_SWP.sft_posterior{counter,1},[],1);
+            cnt_mass = spt_bin_ids'*single_SWP.sft_posterior{counter,1};
+            single_SWP.med_jmp_distance(counter) = median(abs(diff(cnt_mass)));
+            pos_sprd = 0;
+            for bb=1:numel(cnt_mass)
+                pos_sprd = pos_sprd+sqrt((spt_bin_ids'-cnt_mass(bb)).^2*single_SWP.sft_posterior{counter,1}(:,bb));
+            end
+            single_SWP.avg_pos_spread(counter) = pos_sprd/numel(cnt_mass);
+            single_SWP.med_max_post(counter) = mean(max_p);
+            single_SWP.max_loc(counter) = {max_loc-N_spatial_bins/2};
+            single_SWP.cnt_mas(counter) = {cnt_mass-N_spatial_bins/2};
+            single_SWP.est_dist(counter) = {interp1((cnt_mass-N_spatial_bins/2)*bin_size_1D,linspace(1,numel(cnt_mass),n_reshape)')};
+            
+            counter=counter+1;
+        end
+        
+    end
+    warning('on');
+    
+    no_match = 0;   % If matching the number of cycles for w/wo echolocation
+    
+    %=== Extract subset using defined criteria
+    SWP_sst = single_SWP(single_SWP.mean_fract_pos>0.15 & single_SWP.mean_fract_pos<0.85 & single_SWP.mean_spk_dsty>prctile(single_SWP.mean_spk_dsty,20) & single_SWP.med_jmp_distance>0.2 & single_SWP.prc_dec>0.7 & single_SWP.rms_dec<1.5,:);
+    SWP_sst_yclk = SWP_sst( cellfun(@any,SWP_sst.clk),:);
+    SWP_sst_nclk = SWP_sst(~cellfun(@any,SWP_sst.clk),:);
+    
+    %=== Calculate averages and STDs
+    N_sweeps = size(SWP_sst_yclk,1);
+    est_dist = zeros(size(SWP_sst_yclk.est_dist{1,1},1),size(SWP_sst_yclk,1));
+    rsz_spk_dsty = zeros(size(SWP_sst_yclk.rsz_spk_dsty{1,1},1),size(SWP_sst_yclk,1));
+    rsz_wbt = zeros(size(SWP_sst_yclk.rsz_wbt{1,1},1),size(SWP_sst_yclk,1));
+    rsz_clk = zeros(size(SWP_sst_yclk.rsz_clk{1,1},1),size(SWP_sst_yclk,1));
+    for i=1:N_sweeps
+        est_dist(:,i) = SWP_sst_yclk.est_dist{i,1};
+        rsz_spk_dsty(:,i) = SWP_sst_yclk.rsz_spk_dsty{i,1};
+        rsz_wbt(:,i) = SWP_sst_yclk.rsz_wbt{i,1};
+        rsz_clk(:,i) = SWP_sst_yclk.rsz_clk{i,1};
+    end
+    avg_est_dist = mean(est_dist,2);                  avg_rsz_spk_dsty = mean(rsz_spk_dsty,2);                  avg_rsz_wbt = mean(rsz_wbt,2);                  avg_rsz_clk = mean(rsz_clk,2);
+    sem_est_dist = std(est_dist,[],2)/sqrt(N_sweeps); sem_rsz_spk_dsty = std(rsz_spk_dsty,[],2)/sqrt(N_sweeps); sem_rsz_wbt = std(rsz_wbt,[],2)/sqrt(N_sweeps); sem_rsz_clk = std(rsz_clk,[],2)/sqrt(N_sweeps);
+    
+    %=== Calculate averages and STDs
+    N_sweeps_nclk = size(SWP_sst_nclk,1);
+    est_dist_nclk = zeros(size(SWP_sst_nclk.est_dist{1,1},1),size(SWP_sst_nclk,1));
+    rsz_spk_dsty_nclk = zeros(size(SWP_sst_nclk.rsz_spk_dsty{1,1},1),size(SWP_sst_nclk,1));
+    rsz_wbt_nclk = zeros(size(SWP_sst_nclk.rsz_wbt{1,1},1),size(SWP_sst_nclk,1));
+    rsz_clk_nclk = zeros(size(SWP_sst_nclk.rsz_clk{1,1},1),size(SWP_sst_nclk,1));
+    for i=1:N_sweeps_nclk
+        est_dist_nclk(:,i) = SWP_sst_nclk.est_dist{i,1};
+        rsz_spk_dsty_nclk(:,i) = SWP_sst_nclk.rsz_spk_dsty{i,1};
+        rsz_wbt_nclk(:,i) = SWP_sst_nclk.rsz_wbt{i,1};
+        rsz_clk_nclk(:,i) = SWP_sst_nclk.rsz_clk{i,1};
+    end
+    rng(3); %3
+    if no_match
+        avg_est_dist_nclk = mean(est_dist_nclk,2);                  avg_rsz_spk_dsty_nclk = mean(rsz_spk_dsty_nclk,2);                  avg_rsz_wbt_nclk = mean(rsz_wbt_nclk,2);                  avg_rsz_clk_nclk = mean(rsz_clk_nclk,2);
+        sem_est_dist_nclk = std(est_dist_nclk,[],2)/sqrt(N_sweeps_nclk); sem_rsz_spk_dsty_nclk = std(rsz_spk_dsty_nclk,[],2)/sqrt(N_sweeps_nclk); sem_rsz_wbt_nclk = std(rsz_wbt_nclk,[],2)/sqrt(N_sweeps_nclk); sem_rsz_clk_nclk = std(rsz_clk_nclk,[],2)/sqrt(N_sweeps_nclk);
+    else
+        subsample = datasample(1:N_sweeps_nclk,N_sweeps,'Replace',false);
+        avg_est_dist_nclk = mean(est_dist_nclk(:,subsample),2);                  avg_rsz_spk_dsty_nclk = mean(rsz_spk_dsty_nclk(:,subsample),2);                  avg_rsz_wbt_nclk = mean(rsz_wbt_nclk(:,subsample),2);                  avg_rsz_clk_nclk = mean(rsz_clk_nclk(:,subsample),2);
+        sem_est_dist_nclk = std(est_dist_nclk(:,subsample),[],2)/sqrt(N_sweeps); sem_rsz_spk_dsty_nclk = std(rsz_spk_dsty_nclk(:,subsample),[],2)/sqrt(N_sweeps); sem_rsz_wbt_nclk = std(rsz_wbt_nclk(:,subsample),[],2)/sqrt(N_sweeps); sem_rsz_clk_nclk = std(rsz_clk_nclk(:,subsample),[],2)/sqrt(N_sweeps);
+    end
+    
+    %=== Define bins
+    rsz_bin_ctrs = linspace(-180,180,n_reshape);
+    
+    %=== Show averages
+    figure('units','normalized','outerposition',[.3 .3 .3 .6]);
+    tiledlayout(2,3,'TileSpacing','compact');
+    nexttile;   plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_est_dist,avg_est_dist-sem_est_dist,avg_est_dist+sem_est_dist,'k');
+    hold on;    plot(0*[1 1],ylim,'k--'); xlim('tight');    title('Average Decoding Error');    xticks([]);
+    plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_est_dist_nclk,avg_est_dist_nclk-sem_est_dist_nclk,avg_est_dist_nclk+sem_est_dist_nclk,'k');
+    nexttile;   plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_spk_dsty,avg_rsz_spk_dsty-sem_rsz_spk_dsty,avg_rsz_spk_dsty+sem_rsz_spk_dsty,'r');
+    hold on;    plot(0*[1 1],ylim,'k--'); xlim('tight');    title('Average Spike Density');  xticks([]);
+    plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_spk_dsty_nclk,avg_rsz_spk_dsty_nclk-sem_rsz_spk_dsty_nclk,avg_rsz_spk_dsty_nclk+sem_rsz_spk_dsty_nclk,'r');
+    nexttile;   plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_clk,avg_rsz_clk-sem_rsz_clk,avg_rsz_clk+sem_rsz_clk,'b');
+    hold on;    plot(0*[1 1],ylim,'k--'); xlim('tight');    title('Average Call Rate');      xticks([]);
+    plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_clk_nclk,avg_rsz_clk_nclk-sem_rsz_clk_nclk,avg_rsz_clk_nclk+sem_rsz_clk_nclk,'b');
+    nexttile;   plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_wbt,avg_rsz_wbt-sem_rsz_wbt,avg_rsz_wbt+sem_rsz_wbt,'k');
+    hold on;    plot(0*[1 1],ylim,'k--'); xlim('tight');
+    xticks([-180 0 180]);    ylabel('Accelerometer');
+    plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_wbt_nclk,avg_rsz_wbt_nclk-sem_rsz_wbt_nclk,avg_rsz_wbt_nclk+sem_rsz_wbt_nclk,'k');
+    nexttile;   plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_wbt,avg_rsz_wbt-sem_rsz_wbt,avg_rsz_wbt+sem_rsz_wbt,'k');
+    hold on;    plot(0*[1 1],ylim,'k--'); xlim('tight');
+    xticks([-180 0 180]);    ylabel('Accelerometer');
+    plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_wbt_nclk,avg_rsz_wbt_nclk-sem_rsz_wbt_nclk,avg_rsz_wbt_nclk+sem_rsz_wbt_nclk,'k');
+    nexttile;   plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_wbt,avg_rsz_wbt-sem_rsz_wbt,avg_rsz_wbt+sem_rsz_wbt,'k');
+    hold on;    plot(0*[1 1],ylim,'k--'); xlim('tight');
+    xticks([-180 0 180]);    ylabel('Accelerometer');
+    plotWinterval_AF_v0(rsz_bin_ctrs  ,avg_rsz_wbt_nclk,avg_rsz_wbt_nclk-sem_rsz_wbt_nclk,avg_rsz_wbt_nclk+sem_rsz_wbt_nclk,'k');
+    sgtitle(['Average of ',num2str(N_sweeps),' cycles']);
+    
+end
