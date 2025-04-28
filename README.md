@@ -1,6 +1,7 @@
 This repository contains MATLAB functions developed for the analysis of Neuropixels electrophysiological recordings and associated behavioral data, focusing on replay and representation dynamics in the bat hippocampus.
 
 Overview
+
 The code includes:
 
 Preprocessing and spike sorting pipelines (using Kilosort outputs).
